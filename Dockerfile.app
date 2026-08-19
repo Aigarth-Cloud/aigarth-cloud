@@ -18,6 +18,13 @@ ARG APP=web
 
 FROM node:20-bookworm-slim AS builder
 ARG APP
+# Public env vars (NEXT_PUBLIC_*) are inlined into the client bundle at
+# `next build` time, so they must be present in the build context, not
+# just at runtime. Pass the GA measurement ID with
+#   --build-arg NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
+# at build time. Empty / unset means "no analytics".
+ARG NEXT_PUBLIC_GA_ID=""
+ENV NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
 ENV PNPM_HOME=/pnpm
 ENV PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
