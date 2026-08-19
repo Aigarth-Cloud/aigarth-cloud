@@ -84,19 +84,6 @@ export default function AboutPage() {
         </div>
       </Section>
 
-      <Section
-        title="Backed by"
-        description="Investors who share the long-term vision."
-      >
-        <div className="grid grid-cols-2 items-center gap-x-12 gap-y-6 sm:grid-cols-4">
-          {["Sequoia", "Andreessen Horowitz", "Paradigm", "Coatue", "Founders Fund", "Greylock", "Index", "Lightspeed"].map((name) => (
-            <div key={name} className="text-center text-sm font-medium text-muted-foreground/80">
-              {name}
-            </div>
-          ))}
-        </div>
-      </Section>
-
       <section className="py-20 md:py-28">
         <div className="container-narrow text-center">
           <h2 className="text-balance font-display text-4xl font-medium leading-[1.1] tracking-tight md:text-5xl">
