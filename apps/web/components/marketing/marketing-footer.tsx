@@ -48,7 +48,6 @@ const groups = [
     title: "Company",
     items: [
       { label: "About", href: "/about" },
-      { label: "Customers", href: "/customers" },
       { label: "Ecosystem", href: "/ecosystem" },
       { label: "Careers", href: "/careers" },
       { label: "Blog", href: "/blog" },
