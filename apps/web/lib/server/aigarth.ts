@@ -197,7 +197,7 @@ function buildOrganismClient(client: Aigarth): OrganismClient {
  *     so the page code reads naturally; bypasses the stale SDK
  *     dist's missing resource by using `client.request<T>`.
  */
-export type AigarthWithExtras = Aigarth & {
+export type AigarthWithExtras = Omit<Aigarth, "organisms"> & {
   organisms: OrganismClient;
   organismDetail: (slug: string) => Promise<OrganismSummary | null>;
 };
@@ -210,8 +210,8 @@ export function getAigarth(): AigarthWithExtras | null {
     services,
   });
   const organisms = buildOrganismClient(client);
-  (client as AigarthWithExtras).organisms = organisms;
-  (client as AigarthWithExtras).organismDetail = async (slug: string) => {
+  (client as unknown as AigarthWithExtras).organisms = organisms;
+  (client as unknown as AigarthWithExtras).organismDetail = async (slug: string) => {
     try {
       return await organisms.retrieve(slug);
     } catch (err) {
@@ -225,7 +225,7 @@ export function getAigarth(): AigarthWithExtras | null {
       throw err;
     }
   };
-  return client as AigarthWithExtras;
+  return client as unknown as AigarthWithExtras;
 }
 
 export type { Aigarth, ServiceUrls };

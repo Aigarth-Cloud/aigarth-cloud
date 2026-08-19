@@ -22,6 +22,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getAigarth } from "@/lib/server/aigarth";
+import type { OrganismFitnessPoint } from "@/lib/server/aigarth";
 import { getSession } from "@/lib/server/session";
 import { OrganismHeader, type OrganismHeaderData } from "@/components/organism/OrganismHeader";
 import { OrganismActionBar } from "@/components/organism/OrganismActionBar";
@@ -32,7 +33,6 @@ import {
 } from "@/components/organism/LineageBreadcrumb";
 import { LiveNeuralField } from "@/components/organism/LiveNeuralField";
 import { ExperienceStream } from "@/components/organism/ExperienceStream";
-import type { OrganismFitnessEntry } from "@aigarth/sdk";
 
 interface PageProps {
   params: { slug: string };
@@ -132,14 +132,14 @@ export default async function OrganismDetailPage({ params }: PageProps) {
   // 2) Load fitness + lineage in parallel. Tolerate per-endpoint
   // failure so a missing lineage or fitness log doesn't blank
   // the whole page.
-  type FitnessRes = { data: OrganismFitnessEntry[]; nextOffset: number | null; limit: number; offset: number };
+  type FitnessRes = { data: OrganismFitnessPoint[]; nextOffset: number | null; limit: number; offset: number };
   const [fitnessRes, lineageRes] = await Promise.all([
     a.organisms
       .fitness(slug, { limit: 50 })
       .catch(
         () =>
           ({
-            data: [] as OrganismFitnessEntry[],
+            data: [] as OrganismFitnessPoint[],
             nextOffset: null,
             limit: 0,
             offset: 0,
@@ -153,7 +153,7 @@ export default async function OrganismDetailPage({ params }: PageProps) {
   const fitnessPoints: FitnessPoint[] = (fitnessRes.data ?? []).map((f) => ({
     generation: f.generation,
     fitness: f.fitness,
-    recordedAt: f.recordedAt,
+    recordedAt: f.recorded_at,
   }));
 
   const lineageChain: LineageNode[] = lineageRes
