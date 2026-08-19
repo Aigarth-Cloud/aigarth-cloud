@@ -4,6 +4,7 @@ import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { AssistantWidget } from "@/components/shared/assistant-widget";
 import { ThemeSelector } from "@/components/shared/theme-selector";
 import { GoogleAnalytics } from "@/components/shared/google-analytics";
+import { AlphaDisclaimer } from "@/components/marketing/alpha-disclaimer";
 
 export default function MarketingLayout({
   children,
@@ -19,6 +20,7 @@ export default function MarketingLayout({
       <NavModeSwitcher />
       <AssistantWidget />
       <ThemeSelector />
+      <AlphaDisclaimer />
     </div>
   );
 }

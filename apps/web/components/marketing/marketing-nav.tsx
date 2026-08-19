@@ -25,7 +25,6 @@ import {
   Network,
   Zap,
   Terminal,
-  Building2,
   ArrowRight,
   FlaskConical,
   Film,
@@ -152,7 +151,6 @@ const PRODUCTS = [
 
 const COMPANY = [
   { title: "About", href: "/about", description: "Our mission and team." },
-  { title: "Customers", href: "/customers", description: "Who builds on Aigarth." },
   { title: "Case Studies", href: "/case-studies", description: "Real outcomes from real teams." },
   { title: "Ecosystem", href: "/ecosystem", description: "The broader Aigarth network." },
   { title: "Careers", href: "/careers", description: "Build the future with us." },
@@ -174,17 +172,6 @@ const FOR = [
     icon: Terminal,
     accent: "from-sky-500/15 to-sky-500/0",
     iconClass: "text-sky-600 dark:text-sky-400 bg-sky-500/10",
-  },
-  {
-    title: "For Enterprise",
-    href: "/enterprise",
-    eyebrow: "Scale",
-    description:
-      "Dedicated compute, SLAs, compliance, and a single point of contact for your team.",
-    bullets: ["Dedicated clusters", "SOC 2 + ISO 27001", "24/7 support"],
-    icon: Building2,
-    accent: "from-violet-500/15 to-violet-500/0",
-    iconClass: "text-violet-600 dark:text-violet-400 bg-violet-500/10",
   },
   {
     title: "For Material Science",
@@ -601,7 +588,6 @@ function AdvancedNav() {
       <NavLink href="/marketplace">Marketplace</NavLink>
       <NavLink href="/pricing">Pricing</NavLink>
       <NavLink href="/developers">Developers</NavLink>
-      <NavLink href="/enterprise">Enterprise</NavLink>
       <NavLink href="/ipo" highlight>IPO</NavLink>
       <NavMenu trigger="Company" items={COMPANY} />
       <NavLink href="/docs">Docs</NavLink>
