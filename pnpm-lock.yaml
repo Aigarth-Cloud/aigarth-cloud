@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  zod: ~3.23.8
+  zod: ~4.4.3
 
 importers:
 
@@ -314,8 +314,8 @@ importers:
   packages/trinary:
     dependencies:
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@aigarth/config':
         specifier: workspace:*
@@ -506,8 +506,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -576,8 +576,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -640,8 +640,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -707,8 +707,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -774,8 +774,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -838,8 +838,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -917,8 +917,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -978,8 +978,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -1045,8 +1045,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -1103,8 +1103,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -1164,8 +1164,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -1225,8 +1225,8 @@ importers:
         specifier: ^11.3.0
         version: 11.3.0
       zod:
-        specifier: ~3.23.8
-        version: 3.23.8
+        specifier: ~4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.16.11
@@ -5896,8 +5896,8 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
-  zod@3.23.8:
-    resolution: {integrity: sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g==}
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
@@ -10746,7 +10746,7 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod@3.23.8: {}
+  zod@4.4.3: {}
 
   zustand@4.5.7(@types/react@18.3.31)(react@18.3.1):
     dependencies:
