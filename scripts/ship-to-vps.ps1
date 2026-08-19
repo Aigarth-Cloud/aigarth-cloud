@@ -4,10 +4,19 @@
 # the host's Docker daemon, drop the Caddyfile snippet, and bring up the
 # production stack in the right order.
 #
+# Uses Windows OpenSSH (ssh.exe / scp.exe from C:\Windows\System32\OpenSSH\)
+# rather than PuTTY plink/pscp. Reason: PuTTY 0.83 plink.exe refuses the
+# OpenSSH-format private key that `ssh-keygen -o` produces, with:
+#   "OpenSSH SSH-2 private key (new format)"
+# OpenSSH ssh.exe reads that key natively. The deploy key on this machine
+# lives at $HOME\.ssh\aigarth-deploy (override with -Key).
+#
 # Prereqs:
 #   - Run build-prod-images.ps1 first (or pass -Tarball to an existing one)
-#   - The VPS host fingerprint must be in $HOME\.ssh\known_hosts
-#     (run .\scripts\trust-host.ps1 -Once to add it)
+#   - The deploy key at $HOME\.ssh\aigarth-deploy is unencrypted, or the
+#     key is loaded into ssh-agent (ssh-add) if it has a passphrase
+#   - The host fingerprint is in $HOME\.ssh\known_hosts; first-time
+#     connections auto-accept with StrictHostKeyChecking=accept-new
 #   - /opt/aigarth/.env.production must already be on the VPS
 #
 # Usage:
@@ -15,14 +24,17 @@
 #   .\scripts\ship-to-vps.ps1 -Tarball dist\aigarth-images-20260818-123000.tar
 #   .\scripts\ship-to-vps.ps1 -SkipLoad       # just upload
 #   .\scripts\ship-to-vps.ps1 -SkipUp         # load + up without re-upload
+#   .\scripts\ship-to-vps.ps1 -Key C:\Users\you\.ssh\other_key
 
 [CmdletBinding()]
 param(
     [string]$VpsHost = "187.124.35.93",
     [int]$VpsPort = 22,
     [string]$VpsUser = "root",
-    [string]$VpsPassword,
-    [string]$VpsFingerprint,
+    # SSH key file. Defaults to the project's deploy key. The key MUST be
+    # in OpenSSH format (-----BEGIN OPENSSH PRIVATE KEY-----) — PuTTY .ppk
+    # files are not supported here.
+    [string]$Key = (Join-Path $env:USERPROFILE ".ssh\aigarth-deploy"),
     [string]$Tarball,
     [switch]$SkipLoad,
     [switch]$SkipUp
@@ -30,7 +42,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Locate the tarball if not specified — pick the most recent one in dist/
+# ---------------------------------------------------------------------------
+# Resolve OpenSSH tool paths
+# ---------------------------------------------------------------------------
+# Prefer the system ssh.exe / scp.exe; fall back to the default Windows
+# OpenSSH install location.
+$Ssh = (Get-Command ssh.exe -ErrorAction SilentlyContinue).Source
+if (-not $Ssh) {
+    $Ssh = "$env:SystemRoot\System32\OpenSSH\ssh.exe"
+}
+$Scp = (Get-Command scp.exe -ErrorAction SilentlyContinue).Source
+if (-not $Scp) {
+    $Scp = "$env:SystemRoot\System32\OpenSSH\scp.exe"
+}
+if (-not (Test-Path $Ssh)) { throw "ssh.exe not found. Install the Windows OpenSSH client (Windows 10 1809+ ships it)." }
+if (-not (Test-Path $Scp)) { throw "scp.exe not found. Install the Windows OpenSSH client (Windows 10 1809+ ships it)." }
+
+if (-not (Test-Path $Key)) {
+    throw "Deploy key not found at $Key. Override with -Key <path>, or add the key to ssh-agent (ssh-add)."
+}
+
+# ---------------------------------------------------------------------------
+# Locate the tarball
+# ---------------------------------------------------------------------------
 if (-not $Tarball) {
     $dist = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Definition) "..\dist"
     $dist = Resolve-Path $dist -ErrorAction SilentlyContinue
@@ -50,7 +84,9 @@ if (-not (Test-Path $Tarball)) {
 $Tarball = Resolve-Path $Tarball | Select-Object -ExpandProperty Path
 $TarballName = Split-Path -Leaf $Tarball
 
-# Locate the Caddyfile snippet
+# ---------------------------------------------------------------------------
+# Locate the Caddyfile snippet and the production compose
+# ---------------------------------------------------------------------------
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..") | Select-Object -ExpandProperty Path
 $CaddyfileSource = Join-Path $RepoRoot "infrastructure\Caddyfile.aigarth"
@@ -63,79 +99,75 @@ if (-not (Test-Path $ComposeSource)) {
     throw "Compose file not found: $ComposeSource"
 }
 
-# Plink path
-$Plink = "C:\Program Files\PuTTY\plink.exe"
-$Pscp = "C:\Program Files\PuTTY\pscp.exe"
-if (-not (Test-Path $Plink)) {
-    throw "PuTTY plink.exe not found at $Plink"
-}
-if (-not (Test-Path $Pscp)) {
-    throw "PuTTY pscp.exe not found at $Pscp"
-}
-
-# Build plink/pscp arg list
-$plinkArgs = @("-ssh", "-P", "$VpsPort", "-batch")
-$pscpArgs = @("-P", "$VpsPort")
-if ($VpsFingerprint) {
-    $plinkArgs += @("-hostkey", $VpsFingerprint)
-    $pscpArgs += @("-hostkey", $VpsFingerprint)
-}
-if ($VpsPassword) {
-    $plinkArgs += @("-pw", $VpsPassword)
-    $pscpArgs += @("-pw", $VpsPassword)
-} else {
-    # If no password, plink needs an SSH key — agent or default key
-    Write-Host "==> No -VpsPassword provided; relying on SSH agent or default key." -ForegroundColor Yellow
-}
+# ---------------------------------------------------------------------------
+# Common OpenSSH args
+# ---------------------------------------------------------------------------
+# -i <key>             : deploy key
+# -p <port>            : ssh port (lowercase p; scp uses -P, see below)
+# -o BatchMode=yes     : never prompt for password/passphrase (we have a key)
+# -o StrictHostKeyChecking=accept-new : first time we see a host we accept
+#   and remember it in known_hosts; subsequent runs verify the pinned key.
+#   This is the OpenSSH equivalent of plink's -hostkey <fingerprint>.
+$sshBase = @(
+    "-i", $Key,
+    "-p", "$VpsPort",
+    "-o", "BatchMode=yes",
+    "-o", "StrictHostKeyChecking=accept-new"
+)
+# scp uses -P (capital) for port, otherwise the same flags.
+$scpBase = @(
+    "-i", $Key,
+    "-P", "$VpsPort",
+    "-o", "BatchMode=yes",
+    "-o", "StrictHostKeyChecking=accept-new"
+)
 
 function Invoke-Ssh {
     param([string]$Cmd)
-    $args = $plinkArgs + @("$VpsUser@$VpsHost", $Cmd)
-    $output = & $Plink @args 2>&1
+    $args = $sshBase + @("$VpsUser@$VpsHost", $Cmd)
+    $output = & $Ssh @args 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "SSH command failed: $Cmd`n$($output -join "`n")"
+        throw "SSH command failed (exit $LASTEXITCODE): $Cmd`n$($output -join "`n")"
     }
     return $output
 }
 
+function Invoke-Scp {
+    # Single file upload: Invoke-Scp -Local <path> -Remote <dir-or-full-path>
+    param(
+        [Parameter(Mandatory)][string]$Local,
+        [Parameter(Mandatory)][string]$Remote
+    )
+    $args = $scpBase + @($Local, "${VpsUser}@${VpsHost}:$Remote")
+    & $Scp @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "scp upload failed (exit $LASTEXITCODE): $Local -> $Remote"
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Pre-flight
+# ---------------------------------------------------------------------------
 Write-Host "==> Pre-flight: verify SSH works" -ForegroundColor Cyan
 $whoami = Invoke-Ssh "whoami"
-Write-Host "    Logged in as: $whoami" -ForegroundColor Green
+Write-Host "    Logged in as: $($whoami -join '')" -ForegroundColor Green
 
+# ---------------------------------------------------------------------------
 # Upload the tarball
+# ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "==> Uploading $TarballName to /opt/aigarth/ ..." -ForegroundColor Yellow
-$remoteTar = "/opt/aigarth/$TarballName"
-$pscpArgs += @($Tarball, "${VpsUser}@${VpsHost}:/opt/aigarth/")
-& $Pscp @pscpArgs
-if ($LASTEXITCODE -ne 0) {
-    throw "pscp upload failed"
-}
+Invoke-Scp -Local $Tarball -Remote "/opt/aigarth/"
 
 # Upload the compose file
 Write-Host ""
 Write-Host "==> Uploading docker-compose.production.yml ..." -ForegroundColor Yellow
-$pscpComposeArgs = $pscpArgs[0..($pscpArgs.Count - 2)] + @(
-    $ComposeSource,
-    "${VpsUser}@${VpsHost}:/opt/aigarth/infrastructure/"
-)
-# (Re-call with the trailing pair replaced)
-$pscpArgsClean = @("-P", "$VpsPort")
-if ($VpsPassword) { $pscpArgsClean += @("-pw", $VpsPassword) }
-$pscpArgsClean += @($ComposeSource, "${VpsUser}@${VpsHost}:/opt/aigarth/infrastructure/")
-& $Pscp @pscpArgsClean
-if ($LASTEXITCODE -ne 0) { throw "pscp compose upload failed" }
+Invoke-Scp -Local $ComposeSource -Remote "/opt/aigarth/infrastructure/"
 
 # Upload the Caddyfile snippet
 Write-Host ""
 Write-Host "==> Uploading Caddyfile.aigarth ..." -ForegroundColor Yellow
-$pscpCaddyArgs = $pscpArgsClean[0..($pscpArgsClean.Count - 2)] + @(
-    $CaddyfileSource,
-    "${VpsUser}@${VpsHost}:/etc/caddy/Caddyfile.d/aigarth.caddy"
-)
-& $Pscp @pscpCaddyArgs
-if ($LASTEXITCODE -ne 0) { throw "pscp caddyfile upload failed" }
+Invoke-Scp -Local $CaddyfileSource -Remote "/etc/caddy/Caddyfile.d/aigarth.caddy"
 
 if ($SkipLoad) {
     Write-Host ""
@@ -143,15 +175,17 @@ if ($SkipLoad) {
     return
 }
 
+# ---------------------------------------------------------------------------
 # Load images
+# ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "==> docker load -i /opt/aigarth/$TarballName ..." -ForegroundColor Yellow
 Invoke-Ssh "docker load -i /opt/aigarth/$TarballName" | Select-Object -Last 30 | ForEach-Object { Write-Host "    $_" }
 
 # Verify images loaded
 Write-Host ""
-Write-Host "==> Verifying images on the host:" -ForegroundColor Cyan
-$imgs = Invoke-Ssh "docker images --format '{{.Repository}}:{{.Tag}}' | grep aigarth/"
+Write-Host "==> Verifying aigarth/* images on the host:" -ForegroundColor Cyan
+$imgs = Invoke-Ssh "docker images --format '{{.Repository}}:{{.Tag}}' | grep '^aigarth/'"
 $imgs | ForEach-Object { Write-Host "    $_" -ForegroundColor Green }
 
 if ($SkipUp) {
@@ -159,6 +193,10 @@ if ($SkipUp) {
     Write-Host "==> -SkipUp: skipping compose up." -ForegroundColor Yellow
     return
 }
+
+# ---------------------------------------------------------------------------
+# Bring up the production stack
+# ---------------------------------------------------------------------------
 
 # Verify .env.production is in place (the script does not write it; user does)
 Write-Host ""
