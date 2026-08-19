@@ -376,20 +376,20 @@ services:
       PORT: 4000
       APP_BASE_URL: https://aigarth.cloud
       AIGARTH_IDENTITY_URL: http://identity:7001
-    # Traefik labels for the project-tracker dashboard. This is the
-    # aigarthcloud.lucidmindlabs.com origin: phases, deliveries, docs,
-    # services status, etc. Disabled by default (this router requires
-    # the *.aigarth.cloud wildcard to resolve, and we ship with the
-    # marketing site for the halving). Uncomment the labels block when
-    # the wildcard DNS is in place.
-    #
-    # labels:
-    #   - traefik.enable=true
-    #   - traefik.http.routers.aigarth-dashboard.rule=Host(`aigarth.cloud`) && (PathPrefix(`/phases`) || PathPrefix(`/deliveries`) || PathPrefix(`/docs`) || PathPrefix(`/services`))
-    #   - traefik.http.routers.aigarth-dashboard.entrypoints=websecure
-    #   - traefik.http.routers.aigarth-dashboard.tls.certresolver=letsencrypt
-    #   - traefik.http.routers.aigarth-dashboard.priority=20
-    #   - traefik.http.services.aigarth-dashboard.loadbalancer.server.port=4000
+    # Traefik labels for the project-tracker dashboard at command.aigarth.cloud.
+    # Whole-host router (not path-prefix) so the dashboard's own /, /phases,
+    # /deliveries, /docs, /services routes don't collide with the marketing
+    # site's /docs and /services paths on aigarth.cloud. The *.aigarth.cloud
+    # wildcard A record is in place at hPanel, so DNS resolves. Traefik picks
+    # the route up automatically once the container is recreated.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.aigarth-dashboard.rule=Host(`command.aigarth.cloud`)
+      - traefik.http.routers.aigarth-dashboard.entrypoints=websecure
+      - traefik.http.routers.aigarth-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.routers.aigarth-dashboard.tls.domains[0].main=command.aigarth.cloud
+      - traefik.http.routers.aigarth-dashboard.priority=10
+      - traefik.http.services.aigarth-dashboard.loadbalancer.server.port=4000
     deploy:
       resources:
         limits:
