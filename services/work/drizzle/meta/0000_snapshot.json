@@ -1,0 +1,35 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {},
+  "enums": {
+    "public.work_status": {
+      "name": "work_status",
+      "schema": "public",
+      "values": ["queued", "running", "verified", "failed", "disputed"]
+    },
+    "public.worker_kind": {
+      "name": "worker_kind",
+      "schema": "public",
+      "values": ["local", "remote", "oc-processor", "neuraxon", "human-via-oracle"]
+    },
+    "public.worker_status": {
+      "name": "worker_status",
+      "schema": "public",
+      "values": ["active", "suspended", "offline"]
+    },
+    "public.verification_method": {
+      "name": "verification_method",
+      "schema": "public",
+      "values": ["replication", "challenge", "deterministic", "tee", "zk"]
+    }
+  },
+  "schemas": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}

@@ -1,0 +1,181 @@
+# =============================================================================
+# Aigarth Cloud — .gitignore
+# =============================================================================
+# Conventions for this monorepo:
+#   - The full source tree is public (org: Aigarth-Cloud, license: Qubic
+#     Anti-Military License, see LICENSE.md). Anything secret or local-only
+#     must be listed here.
+#   - Patterns starting with `/` anchor to repo root. Patterns without `/`
+#     match at any depth. Use `**/foo` for a recursive match.
+#   - Internal-only artifacts (closeout scripts, dev scratch, debug SQL) live
+#     under `docs/internal/` and are excluded by the `docs/internal/`
+#     pattern below. Move them out of that path if you want them public.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Node / pnpm
+# -----------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+**/.turbo/
+.turbo/
+
+# -----------------------------------------------------------------------------
+# Build output
+# -----------------------------------------------------------------------------
+.next/
+out/
+build/
+dist/
+**/dist/
+**/build/
+*.tsbuildinfo
+
+# -----------------------------------------------------------------------------
+# Environment & secrets
+# -----------------------------------------------------------------------------
+# Root .env and per-service .env files. The .env.example sibling is committed.
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+# But keep the example files
+!**/.env.example
+!**/.env.aigarth.example
+
+# -----------------------------------------------------------------------------
+# Logs (runtime + build)
+# -----------------------------------------------------------------------------
+*.log
+*.err
+**/*.log
+**/*.err
+logs/
+**/logs/
+
+# -----------------------------------------------------------------------------
+# OS
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------------------------------------------------------
+# Editor / IDE
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# -----------------------------------------------------------------------------
+# Test / coverage
+# -----------------------------------------------------------------------------
+coverage/
+**/coverage/
+**/lcov-report/
+**/lcov.info
+**/.nyc_output/
+
+# -----------------------------------------------------------------------------
+# Local infrastructure volumes (docker compose)
+# -----------------------------------------------------------------------------
+infrastructure/.pgdata/
+infrastructure/.redisdata/
+infrastructure/.natsdata/
+infrastructure/.miniodata/
+
+# -----------------------------------------------------------------------------
+# Project-tracker app (apps/dashboard)
+# -----------------------------------------------------------------------------
+apps/dashboard/data/
+apps/dashboard/.next/
+apps/dashboard/.dev.log
+apps/dashboard/tsconfig.tsbuildinfo
+apps/dashboard/coverage/
+
+# -----------------------------------------------------------------------------
+# Web app (apps/web)
+# -----------------------------------------------------------------------------
+apps/web/.next/
+apps/web/coverage/
+
+# -----------------------------------------------------------------------------
+# Public-site + dashboard local artifacts
+# -----------------------------------------------------------------------------
+.aigarth/
+.previews/
+
+# -----------------------------------------------------------------------------
+# Local scratchpad (NOT a git artifact, but a convention)
+# -----------------------------------------------------------------------------
+workspace/
+workspace/**/
+data/
+data/**/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------------------------------
+# Old node_modules (leftover from pre-monorepo structure; safe to delete)
+# -----------------------------------------------------------------------------
+node_modules.old/
+
+# -----------------------------------------------------------------------------
+# Deploy + secrets + build logs (the "tmp-" namespace)
+# -----------------------------------------------------------------------------
+tmp-*.log
+tmp-*.err
+tmp-*.sh
+tmp-*.sql
+tmp-*.json
+tmp-keys.txt
+tmp-ed25519.txt
+tmp-known-hosts.txt
+tmp-ssh-check.json
+tmp-aigarth-secrets.env
+tmp-app-pkg.json
+tmp-root-pkg.json
+tmp-build-*.log
+tmp-build-*.err
+tmp-pnpm*.log
+tmp-chunk-*.js
+tmp-chunks/
+tmp-web-app/
+tmp-web-extract/
+tmp-pnpm-react.log
+tmp-rest.log
+tmp-rest.err
+
+# -----------------------------------------------------------------------------
+# Netstat / local network snapshots
+# -----------------------------------------------------------------------------
+netstat.txt
+login.json
+
+# -----------------------------------------------------------------------------
+# Vercel / Netlify / previews
+# -----------------------------------------------------------------------------
+.vercel/
+.netlify/
+
+# -----------------------------------------------------------------------------
+# Phase-28 deploy artifacts and phase-specific one-off scripts
+# -----------------------------------------------------------------------------
+docs/internal/
+
+# -----------------------------------------------------------------------------
+# Disabled / disabled-by-suffix test files
+# -----------------------------------------------------------------------------
+**/*.test.ts.bak
+**/*.test.ts.bak.disabled
+**/*.test.tsx.bak
+**/*.test.tsx.bak.disabled

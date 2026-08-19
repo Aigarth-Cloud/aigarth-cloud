@@ -1,0 +1,987 @@
+/**
+ * ANN service — Drizzle schema.
+ *
+ *   categories                 — taxonomy (Medical, Legal, Finance, Coding, ...)
+ *   licenses                   — license kinds (Open / Commercial / Restricted / custom)
+ *   anns                       — canonical ANN record
+ *   ann_versions               — immutable version history
+ *   ann_deployments            — where the ANN is running (links to services/compute)
+ *   ann_ratings                — peer reviews (1-5 stars + text)
+ *   ann_benchmarks             — verified accuracy / latency numbers
+ *   ann_licenses_granted       — when a user licenses an ANN for use
+ *   ann_audit_logs             — service-local audit log
+ *   ann_decisions              — emit-side log of every trinary decision (Phase 18B)
+ *   ann_decision_outcomes      — outcome-side: what actually happened after a decision (Phase 19D.1)
+ *
+ * Design notes:
+ *   - All bigint columns omit defaults (drizzle-kit can't serialize BigInt literals).
+ *   - All enum columns are prefixed with `ann_` to avoid collision with other services.
+ *   - Audit log is prefixed with `ann_` to match.
+ *   - Cross-service refs (user_id, ann_id, version_id, deployment_id) are stored as uuid
+ *     without FK to other services to avoid coupling schema across services.
+ */
+
+import { sql } from "drizzle-orm";
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  bigint,
+  integer,
+  numeric,
+  boolean,
+  jsonb,
+  pgEnum,
+  uniqueIndex,
+  index,
+  check,
+  doublePrecision,
+} from "drizzle-orm/pg-core";
+
+// ---------- Enums ----------
+
+export const annVisibility = pgEnum("ann_visibility", ["public", "unlisted", "private"]);
+
+export const annStatus = pgEnum("ann_status", [
+  "draft",
+  "published",
+  "deprecated",
+  "suspended",
+]);
+
+export const annDeploymentStatus = pgEnum("ann_deployment_status", [
+  "pending",
+  "deploying",
+  "running",
+  "stopped",
+  "failed",
+]);
+
+export const annLicenseKind = pgEnum("ann_license_kind", [
+  "open",
+  "commercial",
+  "restricted",
+  "custom",
+]);
+
+export const annLicenseGrantStatus = pgEnum("ann_license_grant_status", [
+  "active",
+  "revoked",
+  "expired",
+]);
+
+/**
+ * Phase 18B — how an ANN communicates its output.
+ *
+ * - `openai_chat` (default): the legacy OpenAI-compatible text surface
+ * - `trinary`: the /decide route emits an IntentEnvelope; calls through
+ *   the gateway's chat completions endpoint can request `response_format: "trinary"`
+ *   in Phase 18C
+ * - `hybrid`: the ANN exposes BOTH surfaces; the caller picks per request
+ */
+export const annDecisionProtocol = pgEnum("ann_decision_protocol", [
+  "openai_chat",
+  "trinary",
+  "hybrid",
+]);
+
+// ---------- Categories ----------
+
+export const categories = pgTable(
+  "ann_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    icon: text("icon"),
+    sortOrder: integer("sort_order").notNull().default(100),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    slugIdx: uniqueIndex("ann_categories_slug_idx").on(t.slug),
+  }),
+);
+
+// ---------- Licenses ----------
+
+export const licenses = pgTable(
+  "ann_licenses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    kind: annLicenseKind("kind").notNull(),
+    /** Full license text (markdown). */
+    terms: text("terms"),
+    /** Price per call in QUBIC. 0 for Open. */
+    pricePerCallQubic: bigint("price_per_call_qubic", { mode: "bigint" }).notNull(),
+    /** Revenue share to the creator in basis points (0-10000). */
+    revenueShareBps: integer("revenue_share_bps").notNull().default(0),
+    allowsModification: boolean("allows_modification").notNull().default(false),
+    allowsCommercialUse: boolean("allows_commercial_use").notNull().default(false),
+    allowsRedistribution: boolean("allows_redistribution").notNull().default(false),
+    requiresAttribution: boolean("requires_attribution").notNull().default(true),
+    /** Whether new ANNs can be created under this license. */
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    slugIdx: uniqueIndex("ann_licenses_slug_idx").on(t.slug),
+    kindIdx: index("ann_licenses_kind_idx").on(t.kind),
+  }),
+);
+
+// ---------- ANNs ----------
+
+export const anns = pgTable(
+  "anns",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** URL-friendly unique identifier (kebab-case, derived from name). */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    tagline: text("tagline"),
+    description: text("description"),
+    /** Lucide icon name (string; UI maps to component). */
+    icon: text("icon"),
+    /** Free-form tags for search/discovery. */
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    licenseId: uuid("license_id").references(() => licenses.id, { onDelete: "set null" }),
+    creatorUserId: uuid("creator_user_id").notNull(),
+    creatorOrgId: uuid("creator_org_id"),
+    /** Display name for the creator (cached at creation for marketplace listing). */
+    creatorName: text("creator_name").notNull(),
+    visibility: annVisibility("visibility").notNull().default("public"),
+    status: annStatus("status").notNull().default("draft"),
+    /** Optional Qubic wallet that signs the ANN. */
+    creatorWalletAddress: text("creator_wallet_address"),
+    /** Creator's signature over (id || slug || current_version_id). Format-only for now. */
+    signature: text("signature"),
+    /** Benchmark scores (cached from latest version). */
+    accuracy: numeric("accuracy", { precision: 5, scale: 2 }),
+    latencyP50Ms: integer("latency_p50_ms"),
+    latencyP99Ms: integer("latency_p99_ms"),
+    /** Aggregate counters (denormalized for fast browse). */
+    totalCalls: bigint("total_calls", { mode: "bigint" }).notNull(),
+    totalRevenueQubic: bigint("total_revenue_qubic", { mode: "bigint" }).notNull(),
+    monthlyCalls: bigint("monthly_calls", { mode: "bigint" }).notNull(),
+    downloads: bigint("downloads", { mode: "bigint" }).notNull(),
+    ratingAverage: numeric("rating_average", { precision: 3, scale: 2 }),
+    ratingCount: integer("rating_count").notNull().default(0),
+    /** Latest version pointer. */
+    currentVersionId: uuid("current_version_id"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Phase 18B — how the ANN communicates its output. See ADR 003.
+     * Defaults to `openai_chat` so existing ANNs are unaffected.
+     */
+    decisionProtocol: annDecisionProtocol("decision_protocol").notNull().default("openai_chat"),
+    /**
+     * Phase 18B — the system prompt an LLM-backed ANN uses to learn how
+     * to emit a valid IntentEnvelope. Null for non-trinary ANNs.
+     * Stored as text so the ANN producer can iterate on the prompt
+     * without a code deploy.
+     */
+    trinaryPromptTemplate: text("trinary_prompt_template"),
+    /**
+     * Phase 18B — operator-trusted authority weight, [0, 1]. Default 0.5.
+     * The ANN does not set this; the tissue operator does. A higher value
+     * means a tissue gives this ANN more weight in its consensus
+     * computation. See `@aigarth/trinary` `authority` field.
+     */
+    authorityWeight: numeric("authority_weight", { precision: 4, scale: 3 }).notNull().default("0.5"),
+  },
+  (t) => ({
+    slugIdx: uniqueIndex("anns_slug_idx").on(t.slug),
+    statusIdx: index("anns_status_idx").on(t.status),
+    visibilityIdx: index("anns_visibility_idx").on(t.visibility),
+    categoryIdx: index("anns_category_idx").on(t.categoryId),
+    licenseIdx: index("anns_license_idx").on(t.licenseId),
+    creatorIdx: index("anns_creator_idx").on(t.creatorUserId),
+    decisionProtocolIdx: index("anns_decision_protocol_idx").on(t.decisionProtocol),
+  }),
+);
+
+// ---------- Versions ----------
+
+export const annVersions = pgTable(
+  "ann_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    /** Semver (e.g. "1.0.0"). Unique per ANN. */
+    version: text("version").notNull(),
+    changelog: text("changelog"),
+    /** Pointer to the training artifact (URL, CID, or local path). */
+    artifactUrl: text("artifact_url"),
+    artifactSizeBytes: bigint("artifact_size_bytes", { mode: "bigint" }),
+    /** sha256 of the artifact for integrity verification. */
+    artifactHash: text("artifact_hash"),
+    /** Optional link to the services/compute training job that produced this version. */
+    trainingComputeJobId: uuid("training_compute_job_id"),
+    trainingDatasetHash: text("training_dataset_hash"),
+    /** Training hyperparameters. */
+    hyperparameters: jsonb("hyperparameters").$type<Record<string, unknown>>().notNull().default({}),
+    /** Training metrics (loss, accuracy, eval scores). */
+    metrics: jsonb("metrics").$type<Record<string, unknown>>().notNull().default({}),
+    /** Creator's signature over the version. */
+    signature: text("signature"),
+    /** Whether this is the version that should be served by default for new deployments. */
+    isLatest: boolean("is_latest").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_versions_ann_idx").on(t.annId),
+    annVersionIdx: uniqueIndex("ann_versions_ann_version_idx").on(t.annId, t.version),
+    latestIdx: index("ann_versions_latest_idx").on(t.annId, t.isLatest),
+  }),
+);
+
+// ---------- Deployments ----------
+
+/**
+ * Phase 19D.3 — how a deployment is serving traffic. Multiple deployments
+ * of the same ANN can coexist (e.g. a 90% `active` v1 + a 10% `canary` v2),
+ * and any number of `shadow` deployments can run alongside for evaluation.
+ */
+export const annDeployMode = pgEnum("ann_deploy_mode", [
+  "active",      // serving traffic, weighted by traffic_weight
+  "canary",      // serving a small slice of traffic (e.g. 10% canary)
+  "shadow",      // runs alongside active, results logged but not served
+  "deprecated",  // stopped serving; existing decision log preserved
+]);
+
+export const annDeployments = pgTable(
+  "ann_deployments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id")
+      .notNull()
+      .references(() => annVersions.id, { onDelete: "restrict" }),
+    /** Cross-service ref to services/compute. */
+    regionId: uuid("region_id"),
+    clusterId: uuid("cluster_id"),
+    computeJobId: uuid("compute_job_id"),
+    status: annDeploymentStatus("status").notNull().default("pending"),
+    /**
+     * Phase 19D.3 — how this deployment is serving traffic. Default
+     * 'active' so existing rows (and the auto-promote path) Just Work.
+     */
+    deployMode: annDeployMode("deploy_mode").notNull().default("active"),
+    /**
+     * Phase 19D.3 — 0-100, the share of traffic this deployment gets
+     * among all `active`/`canary` deployments of the same ANN. Defaults
+     * to 100 (single deployment = all traffic). For A/B or canary, set
+     * this on each deployment such that the sum is 100.
+     */
+    trafficWeight: integer("traffic_weight").notNull().default(100),
+    /** Public URL where the deployed ANN is served (filled once running). */
+    endpointUrl: text("endpoint_url"),
+    replicas: integer("replicas").notNull().default(1),
+    /** Owner of the deployment (creator or licensee). */
+    ownerUserId: uuid("owner_user_id").notNull(),
+    ownerOrgId: uuid("owner_org_id"),
+    /** Cost in QUBIC per call. */
+    costPerCallQubic: bigint("cost_per_call_qubic", { mode: "bigint" }).notNull(),
+    deployedAt: timestamp("deployed_at", { withTimezone: true }),
+    stoppedAt: timestamp("stopped_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_deployments_ann_idx").on(t.annId),
+    versionIdx: index("ann_deployments_version_idx").on(t.versionId),
+    statusIdx: index("ann_deployments_status_idx").on(t.status),
+    modeIdx: index("ann_deployments_mode_idx").on(t.deployMode),
+    ownerIdx: index("ann_deployments_owner_idx").on(t.ownerUserId),
+  }),
+);
+
+// ---------- Ratings ----------
+
+export const annRatings = pgTable(
+  "ann_ratings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    rating: integer("rating").notNull(),
+    review: text("review"),
+    /** True if the user has actually deployed this ANN at least once. */
+    verifiedUse: boolean("verified_use").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annUserIdx: uniqueIndex("ann_ratings_ann_user_idx").on(t.annId, t.userId),
+    annIdx: index("ann_ratings_ann_idx").on(t.annId),
+  }),
+);
+
+// ---------- Benchmarks ----------
+
+export const annBenchmarks = pgTable(
+  "ann_benchmarks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").references(() => annVersions.id, { onDelete: "set null" }),
+    /** Name of the benchmark suite, e.g. "MMLU", "HumanEval", "Internal-Q-A". */
+    benchmarkName: text("benchmark_name").notNull(),
+    /** Score in 0-100. */
+    score: numeric("score", { precision: 5, scale: 2 }).notNull(),
+    /** Hash of the dataset used (for reproducibility). */
+    datasetHash: text("dataset_hash"),
+    /** "internal" or external name. */
+    runner: text("runner").notNull().default("internal"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_benchmarks_ann_idx").on(t.annId),
+    nameIdx: index("ann_benchmarks_name_idx").on(t.benchmarkName),
+  }),
+);
+
+// ---------- License grants ----------
+
+export const annLicensesGranted = pgTable(
+  "ann_licenses_granted",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    licenseId: uuid("license_id")
+      .notNull()
+      .references(() => licenses.id, { onDelete: "restrict" }),
+    userId: uuid("user_id").notNull(),
+    orgId: uuid("org_id"),
+    status: annLicenseGrantStatus("status").notNull().default("active"),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    callCount: bigint("call_count", { mode: "bigint" }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedReason: text("revoked_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_licenses_granted_ann_idx").on(t.annId),
+    userIdx: index("ann_licenses_granted_user_idx").on(t.userId),
+    annUserIdx: uniqueIndex("ann_licenses_granted_ann_user_idx").on(t.annId, t.userId),
+    statusIdx: index("ann_licenses_granted_status_idx").on(t.status),
+  }),
+);
+
+// ---------- Audit log ----------
+
+export const auditLogs = pgTable(
+  "ann_audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorUserId: uuid("actor_user_id"),
+    orgId: uuid("org_id"),
+    action: text("action").notNull(),
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    actorIdx: index("ann_audit_logs_actor_idx").on(t.actorUserId),
+    actionIdx: index("ann_audit_logs_action_idx").on(t.action),
+    createdIdx: index("ann_audit_logs_created_idx").on(t.createdAt),
+  }),
+);
+
+// ---------- Idempotency keys ----------
+
+export const idempotencyKeys = pgTable(
+  "ann_idempotency_keys",
+  {
+    /** Composite key: user_id + idempotency_key (per-user scoping). */
+    userId: uuid("user_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    /** The route that accepted the key (e.g. "POST /v1/anns"). */
+    route: text("route").notNull(),
+    /** The captured response. */
+    responseStatus: integer("response_status").notNull(),
+    responseBody: jsonb("response_body").notNull(),
+    /** SHA-256 of the request body, for replay-with-different-body detection. */
+    requestHash: text("request_hash").notNull(),
+    /** Auto-expire after 24h. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: uniqueIndex("ann_idempotency_keys_pk").on(t.userId, t.idempotencyKey, t.route),
+    expiresIdx: index("ann_idempotency_keys_expires_idx").on(t.expiresAt),
+  }),
+);
+
+// ---------- Decision outcomes (Phase 19D.1) ----------
+
+/**
+ * What actually happened in the real world after an ANN emitted a
+ * decision. The `ann_decisions` table is the emit-side (Phase 18B);
+ * this is the outcome-side that closes the feedback loop.
+ *
+ * Lifecycle:
+ *   - Caller records a `success` / `failure` / `reverted` outcome
+ *     when the real-world consequence is known.
+ *   - Callers who don't know yet can record `unknown` and update
+ *     later (the `recordOutcome` service upserts on decision_id).
+ *   - `source` is `manual` for v1 (a user reports). v2 adds
+ *     `webhook` (a downstream system reports) and `auto_evaluation`
+ *     (a background job measures against a labelled dataset).
+ *
+ * One outcome per decision (enforced by the unique index on
+ * `decision_id`). Outcomes are part of the audit log and follow
+ * the same lifecycle as decisions: cascade-delete with the parent
+ * ANN, never soft-deleted by application code.
+ */
+export const annDecisionOutcome = pgEnum("ann_decision_outcome", [
+  "success",
+  "failure",
+  "reverted",
+  "unknown",
+]);
+
+export const annDecisionOutcomes = pgTable(
+  "ann_decision_outcomes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** The ann_decisions row this outcome refers to. Unique — one outcome per decision. */
+    decisionId: uuid("decision_id")
+      .notNull()
+      .unique()
+      .references(() => annDecisions.id, { onDelete: "cascade" }),
+    /** Denormalized for fast queries by ann. */
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    /** The specific version that emitted the decision (denormalized from ann_decisions). */
+    annVersionId: uuid("ann_version_id").references(() => annVersions.id, { onDelete: "set null" }),
+    outcome: annDecisionOutcome("outcome").notNull(),
+    /** How confident the caller is in their label (0-1). Null = caller didn't specify. */
+    confidenceInLabel: numeric("confidence_in_label", { precision: 4, scale: 3 }),
+    /** Free-form notes from the reporter. */
+    notes: text("notes"),
+    /** Who recorded the outcome. For 'manual' source, this is the JWT sub. */
+    recordedBy: uuid("recorded_by").notNull(),
+    /** How the outcome was recorded. v1 supports 'manual' only. v2: 'webhook', 'auto_evaluation'. */
+    source: text("source").notNull().default("manual"),
+    /** When the real-world outcome actually happened (not when it was recorded). */
+    outcomeAt: timestamp("outcome_at", { withTimezone: true }).notNull().defaultNow(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_decision_outcomes_ann_idx").on(t.annId),
+    annOutcomeIdx: index("ann_decision_outcomes_ann_outcome_idx").on(t.annId, t.outcome),
+    recordedAtIdx: index("ann_decision_outcomes_recorded_at_idx").on(t.recordedAt),
+    // decisionId has implicit unique index from .unique() above
+  }),
+);
+
+// ---------- Trinary decisions (Phase 18B) ----------
+
+/**
+ * Append-only log of every IntentEnvelope an ANN emits under the
+ * `/v1/anns/:id/decide` route. One row per decision.
+ *
+ * The full envelope is stored as JSONB for replay; the denormalized
+ * top-level fields (state, confidence, authority, signature, ...) are
+ * promoted to columns for fast index-backed queries (e.g. "give me
+ * all -1 decisions from this ANN in the last 24h").
+ *
+ * Decisions are NEVER updated or deleted by application code. Only
+ * cascade-delete when the parent ANN is hard-deleted. This is a
+ * platform-level audit + replay surface.
+ */
+export const annDecisions = pgTable(
+  "ann_decisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    /** ANN version (semver) at decision time. */
+    annVersion: text("ann_version").notNull(),
+    /** Caller-supplied request id, for cross-service tracing. */
+    requestId: text("request_id").notNull(),
+    callerUserId: uuid("caller_user_id"),
+    callerOrgId: uuid("caller_org_id"),
+    /** Trinary state, denormalized for indexed queries. */
+    state: integer("state").notNull(),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
+    authority: numeric("authority", { precision: 4, scale: 3 }).notNull(),
+    reasoning: text("reasoning").notNull(),
+    recommendedAction: text("recommended_action"),
+    reversibility: text("reversibility").notNull(),
+    timeHorizon: text("time_horizon").notNull(),
+    /** Full envelope as JSONB. Source of truth for replay. */
+    envelope: jsonb("envelope").$type<Record<string, unknown>>().notNull(),
+    /** Hex signature, denormalized for indexed verification. */
+    signature: text("signature").notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /**
+     * Phase 19D.3 — if this call had a shadow deployment running
+     * alongside, this is the version (text semver) of the shadow
+     * that was tried. NULL = no shadow.
+     */
+    shadowVersion: text("shadow_version"),
+    /**
+     * Phase 19D.3 — the shadow deployment's IntentEnvelope. Stored
+     * so the shadow result is auditable + replayable. NULL = no
+     * shadow was tried.
+     */
+    shadowEnvelope: jsonb("shadow_envelope").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_decisions_ann_idx").on(t.annId),
+    annIssuedIdx: index("ann_decisions_ann_issued_idx").on(t.annId, t.issuedAt),
+    requestIdx: index("ann_decisions_request_idx").on(t.requestId),
+    stateIdx: index("ann_decisions_state_idx").on(t.annId, t.state),
+  }),
+);
+
+// ---------- Type exports ----------
+
+export type Category = typeof categories.$inferSelect;
+export type License = typeof licenses.$inferSelect;
+export type Ann = typeof anns.$inferSelect;
+export type NewAnn = typeof anns.$inferInsert;
+export type AnnVersion = typeof annVersions.$inferSelect;
+export type NewAnnVersion = typeof annVersions.$inferInsert;
+export type AnnDeployment = typeof annDeployments.$inferSelect;
+export type NewAnnDeployment = typeof annDeployments.$inferInsert;
+export type AnnDeployMode = (typeof annDeployMode.enumValues)[number];
+export type AnnRating = typeof annRatings.$inferSelect;
+export type NewAnnRating = typeof annRatings.$inferInsert;
+export type AnnBenchmark = typeof annBenchmarks.$inferSelect;
+export type NewAnnBenchmark = typeof annBenchmarks.$inferInsert;
+export type AnnLicenseGrant = typeof annLicensesGranted.$inferSelect;
+export type NewAnnLicenseGrant = typeof annLicensesGranted.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
+export type NewIdempotencyKey = typeof idempotencyKeys.$inferInsert;
+export type AnnDecision = typeof annDecisions.$inferSelect;
+export type NewAnnDecision = typeof annDecisions.$inferInsert;
+export type AnnDecisionOutcomeRow = typeof annDecisionOutcomes.$inferSelect;
+export type NewAnnDecisionOutcomeRow = typeof annDecisionOutcomes.$inferInsert;
+
+// ---------- Retrain config (Phase 19D.2) ----------
+
+/**
+ * Per-ANN opt-in retraining configuration. The cron in services/training
+ * (and the manual retrain endpoint) read this to decide when to enqueue
+ * a retrain job.
+ *
+ * Defaults:
+ *   optIn          = false (opt-in, not opt-out — safe default)
+ *   driftThreshold = 0.05 (a 5pp drop from baseline triggers retraining)
+ *   outcomeFloor   = 50 (need at least 50 outcomes before the rate is meaningful)
+ *   cooldownHours  = 168 (1 week between auto-retrains)
+ *   notifyMode     = "log" (writes an audit log entry; future: email, slack)
+ */
+export const annRetrainConfigs = pgTable("ann_retrain_configs", {
+  annId: uuid("ann_id")
+    .primaryKey()
+    .references(() => anns.id, { onDelete: "cascade" }),
+  optIn: boolean("opt_in").notNull().default(false),
+  /** The success rate at the time the owner enabled retraining. Used as the baseline for drift detection. */
+  baselineSuccessRate: numeric("baseline_success_rate", { precision: 5, scale: 4 }),
+  /** Drop below (baseline - driftThreshold) triggers a retrain. */
+  driftThreshold: numeric("drift_threshold", { precision: 5, scale: 4 }).notNull().default("0.05"),
+  /** Below this total outcome count, also retrain (low confidence in the rate). */
+  outcomeFloor: integer("outcome_floor").notNull().default(50),
+  /** Don't enqueue another retrain within this many hours. */
+  cooldownHours: integer("cooldown_hours").notNull().default(168),
+  /** When the last retrain was enqueued (used to enforce cooldown). */
+  lastRetrainAt: timestamp("last_retrain_at", { withTimezone: true }),
+  /** Which dataset version the next retrain should use. NULL = use the same as the last trained version. */
+  preferredDatasetVersionId: uuid("preferred_dataset_version_id"),
+  /** Notification preference. v1: 'log' only. v2: 'email', 'slack', 'webhook'. */
+  notifyMode: text("notify_mode").notNull().default("log"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AnnRetrainConfig = typeof annRetrainConfigs.$inferSelect;
+export type NewAnnRetrainConfig = typeof annRetrainConfigs.$inferInsert;
+
+/**
+ * Append-only log of every retrain that was triggered (cron or manual).
+ * One row per attempt. Includes the snapshot of outcome stats at the
+ * moment of decision so a future "why did this retrain fire?" inspection
+ * is self-contained.
+ */
+export const annRetrainEvents = pgTable(
+  "ann_retrain_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    /** Cross-service ref to services/training.training_jobs.id. */
+    trainingJobId: uuid("training_job_id"),
+    /** Why the retrain was triggered. */
+    reason: text("reason").notNull(),
+    /** Snapshot of the outcome stats at the time of decision. */
+    baselineSuccessRate: numeric("baseline_success_rate", { precision: 5, scale: 4 }),
+    currentSuccessRate: numeric("current_success_rate", { precision: 5, scale: 4 }),
+    totalOutcomesAtTrigger: integer("total_outcomes_at_trigger"),
+    /** Optional notes. */
+    notes: text("notes"),
+    triggeredAt: timestamp("triggered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_retrain_events_ann_idx").on(t.annId),
+    triggeredIdx: index("ann_retrain_events_triggered_idx").on(t.triggeredAt),
+  }),
+);
+
+export type AnnRetrainEvent = typeof annRetrainEvents.$inferSelect;
+export type NewAnnRetrainEvent = typeof annRetrainEvents.$inferInsert;
+export type AnnVisibility = (typeof annVisibility.enumValues)[number];
+export type AnnStatus = (typeof annStatus.enumValues)[number];
+export type AnnLicenseKind = (typeof annLicenseKind.enumValues)[number];
+export type AnnDecisionProtocol = (typeof annDecisionProtocol.enumValues)[number];
+
+// ---------- Phase 14 — Governance (off-chain) ----------
+//
+// Proposals + votes. Distinct from the on-chain multi-sig (M1+M2,
+// Phase 22): this is the policy surface that decides WHAT to
+// propose to the on-chain multi-sig. Treasury-spend proposals
+// execute by calling AigarthPool.submitTreasuryTransfer, which
+// then needs the multi-sig to approve per Phase 22.
+//
+// Stake-weighted voting: a user's voting weight is the sum of
+// their AigarthPool positions at the time of vote. Off-chain
+// tally, on-chain execution. v1.
+
+export const proposalKind = pgEnum("ann_proposal_kind", [
+  "general",          // non-binding policy discussion
+  "treasury-spend",   // binding — executes via AigarthPool.submitTreasuryTransfer
+  "ecosystem-grant",  // binding — paid out by the treasury
+  "parameter-change", // binding — governance-controlled parameter (e.g. epoch duration)
+]);
+
+export const proposalStatus = pgEnum("ann_proposal_status", [
+  "open",      // accepting votes
+  "passed",    // finalised with majority yes
+  "rejected",  // finalised with majority no
+  "expired",   // finalised at deadline with no quorum
+  "executed",  // passed + executed (treasury-spend / parameter-change)
+  "cancelled", // proposer cancelled before deadline
+]);
+
+export const voteChoice = pgEnum("ann_vote_choice", ["yes", "no", "abstain"]);
+
+export const proposals = pgTable(
+  "ann_proposals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    kind: proposalKind("kind").notNull(),
+    /** Short title shown in lists. */
+    title: text("title").notNull(),
+    /** Markdown body. */
+    body: text("body").notNull(),
+    /** User who proposed. */
+    proposerUserId: uuid("proposer_user_id").notNull(),
+    /**
+     * Proposer's stake at submission time, in Qu-bit. Used as the
+     * "did the proposer have skin in the game?" check + a
+     * minimum-stake check on create.
+     */
+    proposerStakeQubic: bigint("proposer_stake_qubic", { mode: "bigint" }).notNull(),
+    /**
+     * For treasury-spend / ecosystem-grant proposals: the
+     * destination Qubic address.
+     */
+    destinationAddress: text("destination_address"),
+    /**
+     * For treasury-spend / ecosystem-grant proposals: the amount
+     * in Qu-bit.
+     */
+    amountQubic: bigint("amount_qubic", { mode: "bigint" }),
+    /**
+     * For parameter-change proposals: the parameter name + new
+     * value (free-form JSON). E.g. {"name":"QUBIC_QEARN_POLL_MS","value":5000}.
+     */
+    parameterChange: jsonb("parameter_change").$type<Record<string, unknown>>(),
+    /**
+     * Voting deadline. In the simulator the epoch clock is the
+     * only signal; in production this is real wall time. Stored
+     * as timestamp with timezone.
+     */
+    votingDeadlineAt: timestamp("voting_deadline_at", { withTimezone: true }).notNull(),
+    status: proposalStatus("status").notNull().default("open"),
+    /** Cached tally snapshot (updated on each vote + on finalise). */
+    yesWeightQubic: bigint("yes_weight_qubic", { mode: "bigint" }).notNull().default(0n),
+    noWeightQubic: bigint("no_weight_qubic", { mode: "bigint" }).notNull().default(0n),
+    abstainWeightQubic: bigint("abstain_weight_qubic", { mode: "bigint" }).notNull().default(0n),
+    /** Quorum — minimum total weight required for the result to be binding. */
+    quorumQubic: bigint("quorum_qubic", { mode: "bigint" }).notNull().default(0n),
+    /** For executed proposals: the on-chain AigarthPool nonce used. */
+    executionNonce: integer("execution_nonce"),
+    /** When the proposal was finalised (any terminal state). */
+    finalisedAt: timestamp("finalised_at", { withTimezone: true }),
+    /** When the proposal was executed (after finalisation, for binding kinds). */
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    kindIdx: index("ann_proposals_kind_idx").on(t.kind),
+    statusIdx: index("ann_proposals_status_idx").on(t.status),
+    proposerIdx: index("ann_proposals_proposer_idx").on(t.proposerUserId),
+    deadlineIdx: index("ann_proposals_deadline_idx").on(t.votingDeadlineAt),
+  }),
+);
+
+export const proposalVotes = pgTable(
+  "ann_proposal_votes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    proposalId: uuid("proposal_id")
+      .notNull()
+      .references(() => proposals.id, { onDelete: "cascade" }),
+    voterUserId: uuid("voter_user_id").notNull(),
+    /**
+     * Snapshot of the voter's stake at the time of the vote. We
+     * snapshot rather than re-compute so the tally is stable if
+     * the user later unstakes. Stored in Qu-bit.
+     */
+    weightQubic: bigint("weight_qubic", { mode: "bigint" }).notNull(),
+    choice: voteChoice("choice").notNull(),
+    /** Optional note. */
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    proposalIdx: index("ann_proposal_votes_proposal_idx").on(t.proposalId),
+    voterIdx: index("ann_proposal_votes_voter_idx").on(t.voterUserId),
+    // One active vote per (proposal, voter). Re-voting updates the
+    // existing row in place.
+    uniqueVoteIdx: uniqueIndex("ann_proposal_votes_unique_idx").on(t.proposalId, t.voterUserId),
+  }),
+);
+
+export type Proposal = typeof proposals.$inferSelect;
+export type NewProposal = typeof proposals.$inferInsert;
+export type ProposalVote = typeof proposalVotes.$inferSelect;
+export type NewProposalVote = typeof proposalVotes.$inferInsert;
+export type ProposalKind = (typeof proposalKind.enumValues)[number];
+export type ProposalStatus = (typeof proposalStatus.enumValues)[number];
+export type VoteChoice = (typeof voteChoice.enumValues)[number];
+
+// ---------- Phase 26.A — Organism primitive ----------
+//
+// The Organism is a stateful, evolving, lineage-tracked computational
+// intelligence. It extends the Trinary primitive (Phase 18) the way
+// a process extends a function: by adding persistent state.
+//
+// Three tables:
+//   - organisms                 — the organism record itself (genome,
+//                                  environment, objective, fitness,
+//                                  lineage, lifecycle)
+//   - organism_memories         — append-only memory log (short-term /
+//                                  long-term / episodic)
+//   - organism_fitness_history  — append-only fitness over generations
+//
+// Soft-delete: the `deleted_at` column is NULL while the organism is
+// alive. The `creator_idx`, `parent_idx`, `root_idx`, and `status_idx`
+// are partial indexes that exclude soft-deleted rows so the marketplace
+// and lineage views never see a deleted organism.
+//
+// Lineage:
+//   - `parent_id` is the immediate parent (NULL for founders).
+//   - `root_id` is the founder of the lineage. The root organism has
+//     `parent_id IS NULL` and `root_id = id` (a founder points to
+//     itself). Every descendant has `root_id` equal to the founder's
+//     id, regardless of how deep the tree gets.
+//   - `generation` is the depth from the root (0 for founders).
+//
+// Cross-service refs: `creator_id` is a uuid without FK to services/identity
+// to keep this service's schema self-contained (same convention as
+// `anns.creator_user_id`).
+//
+// Append-only tables (`organism_memories`, `organism_fitness_history`)
+// are NEVER updated or deleted by application code. They cascade-delete
+// only when the parent organism is hard-deleted.
+
+// ---------- Organism enums ----------
+
+export const organismVisibility = pgEnum("organism_visibility", [
+  "public",
+  "unlisted",
+  "private",
+]);
+
+export const organismStatus = pgEnum("organism_status", [
+  "draft",
+  "active",
+  "paused",
+  "deprecated",
+  "extinct",
+]);
+
+// ---------- Organisms ----------
+
+export const organisms = pgTable(
+  "organisms",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** URL-friendly unique identifier (kebab-case, derived from name). */
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** Cross-service ref to services/identity. No FK by convention. */
+    creatorId: uuid("creator_id").notNull(),
+    visibility: organismVisibility("visibility").notNull(),
+    status: organismStatus("status").notNull().default("draft"),
+    /** Free-form kind tag, e.g. "tire_compound_v1", "trinary_tissue". */
+    kind: text("kind").notNull(),
+    /** The mutable genome payload (structure depends on `kind`). */
+    genome: jsonb("genome").$type<Record<string, unknown>>().notNull(),
+    /** The environment the organism lives in (problem spec, data refs, ...). */
+    environment: jsonb("environment").$type<Record<string, unknown>>().notNull(),
+    /** The objective function (fitness components, weights, target). */
+    objective: jsonb("objective").$type<Record<string, unknown>>().notNull(),
+    /** Latest fitness score (denormalized from organism_fitness_history). */
+    fitness: doublePrecision("fitness"),
+    /** Immediate parent organism. NULL for founders. */
+    parentId: uuid("parent_id").references((): any => organisms.id),
+    /** Lineage root. Founders have root_id = id; descendants point at the founder. */
+    rootId: uuid("root_id")
+      .notNull()
+      .references((): any => organisms.id),
+    /** Depth from root. 0 for founders. */
+    generation: integer("generation").notNull().default(0),
+    /** Total compute consumed across the organism's lifetime, broken down by resource. */
+    computeConsumed: jsonb("compute_consumed")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    /** When the organism became alive (status moved past 'draft'). */
+    birthAt: timestamp("birth_at", { withTimezone: true }),
+    /** When the organism was retired. */
+    deathAt: timestamp("death_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Soft-delete marker. NULL = alive. Marketplace queries filter this out. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    creatorIdx: index("organisms_creator_idx")
+      .on(t.creatorId)
+      .where(sql`deleted_at IS NULL`),
+    parentIdx: index("organisms_parent_idx")
+      .on(t.parentId)
+      .where(sql`deleted_at IS NULL`),
+    rootIdx: index("organisms_root_idx")
+      .on(t.rootId)
+      .where(sql`deleted_at IS NULL`),
+    statusIdx: index("organisms_status_idx")
+      .on(t.status)
+      .where(sql`deleted_at IS NULL`),
+  }),
+);
+
+// ---------- Organism memories ----------
+
+/**
+ * Append-only memory log for an organism. One row per write.
+ *
+ * `kind` discriminates the memory subsystem:
+ *   - `short_term`  — ephemeral context (e.g. last few turns)
+ *   - `long_term`   — consolidated knowledge (compressed, indexed)
+ *   - `episodic`    — timestamped event records
+ *
+ * `payload` is opaque to the schema; the organism kind defines the shape.
+ *
+ * Rows are NEVER updated or deleted by application code. They cascade-
+ * delete only when the parent organism is hard-deleted.
+ */
+export const organismMemories = pgTable(
+  "organism_memories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organismId: uuid("organism_id")
+      .notNull()
+      .references(() => organisms.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    writtenAt: timestamp("written_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When this memory expires. NULL = never. Used by short_term eviction. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+  },
+  (t) => ({
+    organismKindIdx: index("organism_memories_organism_kind_idx").on(t.organismId, t.kind),
+    kindCheck: check(
+      "organism_memories_kind_check",
+      sql`kind IN ('short_term','long_term','episodic')`,
+    ),
+  }),
+);
+
+// ---------- Organism fitness history ----------
+
+/**
+ * Append-only fitness history for an organism. One row per generation.
+ *
+ * `fitness` is the aggregate score; `components` is the per-component
+ * breakdown (matches the `objective.components` schema). Together they
+ * make the fitness curve reproducible without recomputation.
+ *
+ * Rows are NEVER updated or deleted by application code. They cascade-
+ * delete only when the parent organism is hard-deleted.
+ */
+export const organismFitnessHistory = pgTable(
+  "organism_fitness_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organismId: uuid("organism_id")
+      .notNull()
+      .references(() => organisms.id, { onDelete: "cascade" }),
+    generation: integer("generation").notNull(),
+    fitness: doublePrecision("fitness").notNull(),
+    components: jsonb("components").$type<Record<string, unknown>>().notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    organismIdx: index("organism_fitness_history_organism_idx").on(t.organismId, t.generation),
+  }),
+);
+
+export type Organism = typeof organisms.$inferSelect;
+export type NewOrganism = typeof organisms.$inferInsert;
+export type OrganismMemory = typeof organismMemories.$inferSelect;
+export type NewOrganismMemory = typeof organismMemories.$inferInsert;
+export type OrganismFitnessHistory = typeof organismFitnessHistory.$inferSelect;
+export type NewOrganismFitnessHistory = typeof organismFitnessHistory.$inferInsert;
+export type OrganismVisibility = (typeof organismVisibility.enumValues)[number];
+export type OrganismStatus = (typeof organismStatus.enumValues)[number];

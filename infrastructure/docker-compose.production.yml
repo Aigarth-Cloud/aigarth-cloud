@@ -1,0 +1,423 @@
+# Aigarth Cloud — production compose for the Hostinger VPS at 187.124.35.93.
+#
+# Runs the full 14-container stack (12 services + 2 apps) on an internal
+# Docker network. Public ingress is via the host-level Traefik that the
+# LML platform already runs at /docker/traefik (network_mode: host, with
+# the Docker provider enabled). The Traefik labels below match the same
+# pattern LML services use, so Aigarth routes get picked up automatically
+# once this compose is up.
+#
+# Usage (from the host, after /opt/aigarth/.env.production is in place):
+#   cd /opt/aigarth
+#   docker compose -f infrastructure/docker-compose.production.yml \
+#     up -d postgres redis nats minio minio-init
+#   docker compose -f infrastructure/docker-compose.production.yml \
+#     run --rm migrate
+#   docker compose -f infrastructure/docker-compose.production.yml up -d
+#
+# Then `curl -I https://aigarth.cloud/` should return 200 within ~60s
+# (Let's Encrypt TLS challenge is on port 443 via the existing resolver).
+#
+# This file deliberately uses `name: aigarth-cloud-prod` so container
+# names do not collide with the LML platform stack (`lml-platform`).
+
+name: aigarth-cloud-prod
+
+x-service-base: &service-base
+  restart: unless-stopped
+  env_file: /opt/aigarth/.env.production
+  networks: [aigarth]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+x-app-base: &app-base
+  restart: unless-stopped
+  env_file: /opt/aigarth/.env.production
+  networks: [aigarth]
+  depends_on:
+    postgres:
+      condition: service_healthy
+    identity:
+      condition: service_started
+
+# Aigarth public-domain labels for the existing Traefik at /docker/traefik.
+# It uses --providers.docker=true --providers.docker.exposedbydefault=false,
+# so any container with `traefik.enable=true` gets picked up. The
+# `letsencrypt` certresolver is already defined in the LML Traefik config.
+x-aigarth-tls: &aigarth-tls
+  - traefik.enable=true
+  - traefik.http.routers.aigarth-web.tls.certresolver=letsencrypt
+  - traefik.http.routers.aigarth-web.entrypoints=websecure
+  - traefik.http.services.aigarth-web.loadbalancer.server.port=3003
+  - traefik.http.routers.aigarth-gateway.tls.certresolver=letsencrypt
+  - traefik.http.routers.aigarth-gateway.entrypoints=websecure
+  - traefik.http.services.aigarth-gateway.loadbalancer.server.port=7004
+
+services:
+  # ----------------------------------------------------------------------
+  # Infrastructure (private to the aigarth network)
+  # ----------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: aigarth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - aigarth-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [aigarth]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    container_name: aigarth-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - aigarth-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [aigarth]
+    deploy:
+      resources:
+        limits:
+          memory: 320M
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: aigarth-nats
+    restart: unless-stopped
+    command: ["nats-server", "-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - aigarth-natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [aigarth]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  minio:
+    image: minio/minio:latest
+    container_name: aigarth-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - aigarth-miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [aigarth]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+      mc mb -p local/aigarth || true &&
+      mc mb -p local/aigarth-uploads || true &&
+      echo 'MinIO buckets ready'
+      "
+    restart: "no"
+    networks: [aigarth]
+
+  migrate:
+    image: aigarth/migrate:latest
+    container_name: aigarth-migrate
+    profiles: ["never"]  # run explicitly via `docker compose run --rm migrate`
+    env_file: /opt/aigarth/.env.production
+    # The migration script invokes `tsx --env-file=.env src/db/migrate.ts`
+    # from the service directory. Mount the production env at /repo/.env so
+    # the per-service .env resolves. We mount the SAME file at the
+    # service-level paths too (so the workspace's pnpm sees the right
+    # env in each script invocation).
+    volumes:
+      - /opt/aigarth/.env.production:/repo/.env:ro
+    networks: [aigarth]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------
+  # 12 services. Each reads its port from the per-service env override.
+  # Names match the Fastify server logs (and Phase 27 plan §4.2).
+  # All services stay on the private aigarth network; only the ones
+  # the gateway (or web/dashboard) call into get host-port publishing.
+  # ----------------------------------------------------------------------
+  identity:
+    image: aigarth/identity:latest
+    container_name: aigarth-identity
+    <<: *service-base
+    environment:
+      PORT: 7001
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  qubic:
+    image: aigarth/qubic:latest
+    container_name: aigarth-qubic
+    <<: *service-base
+    environment:
+      PORT: 7002
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  compute:
+    image: aigarth/compute:latest
+    container_name: aigarth-compute
+    <<: *service-base
+    environment:
+      PORT: 7003
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  gateway:
+    image: aigarth/gateway:latest
+    container_name: aigarth-gateway
+    <<: *service-base
+    environment:
+      PORT: 7004
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.aigarth-gateway.rule=Host(`api.aigarth.cloud`) || (Host(`aigarth.cloud`) && PathPrefix(`/v1`)) || (Host(`www.aigarth.cloud`) && PathPrefix(`/v1`))
+      - traefik.http.routers.aigarth-gateway.entrypoints=websecure
+      - traefik.http.routers.aigarth-gateway.tls.certresolver=letsencrypt
+      - traefik.http.routers.aigarth-gateway.priority=30
+      - traefik.http.services.aigarth-gateway.loadbalancer.server.port=7004
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  billing:
+    image: aigarth/billing:latest
+    container_name: aigarth-billing
+    <<: *service-base
+    environment:
+      PORT: 7005
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  ann:
+    image: aigarth/ann:latest
+    container_name: aigarth-ann
+    <<: *service-base
+    environment:
+      PORT: 7006
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  marketplace:
+    image: aigarth/marketplace:latest
+    container_name: aigarth-marketplace
+    <<: *service-base
+    environment:
+      PORT: 7007
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  tissue:
+    image: aigarth/tissue:latest
+    container_name: aigarth-tissue
+    <<: *service-base
+    environment:
+      PORT: 7008
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  dataset:
+    image: aigarth/dataset:latest
+    container_name: aigarth-dataset
+    <<: *service-base
+    environment:
+      PORT: 7009
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  economy:
+    image: aigarth/economy:latest
+    container_name: aigarth-economy
+    <<: *service-base
+    environment:
+      PORT: 7010
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  training:
+    image: aigarth/training:latest
+    container_name: aigarth-training
+    <<: *service-base
+    environment:
+      PORT: 7011
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TRAINING_COMPUTE_MODE: stub
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  work:
+    image: aigarth/work:latest
+    container_name: aigarth-work
+    <<: *service-base
+    environment:
+      PORT: 7012
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ----------------------------------------------------------------------
+  # 2 Next.js apps. Both have Traefik labels so the public ingress picks
+  # them up. The web app handles the marketing site and the customer
+  # dashboard; the project-tracker app (apps/dashboard) lives at its own
+  # path prefix and is wired up by a follow-up Traefik router when ready.
+  # ----------------------------------------------------------------------
+  web:
+    image: aigarth/web:latest
+    container_name: aigarth-web
+    <<: *app-base
+    environment:
+      PORT: 3003
+      APP_BASE_URL: https://aigarth.cloud
+      AIGARTH_IDENTITY_URL: http://identity:7001
+      AIGARTH_GATEWAY_URL: http://gateway:7004
+    labels:
+      - traefik.enable=true
+      # Apex + www: marketing site, customer dashboard, anything not
+      # routed to the gateway below. Lower priority so /v1/* goes to
+      # the gateway first.
+      - traefik.http.routers.aigarth-web.rule=Host(`aigarth.cloud`) || Host(`www.aigarth.cloud`)
+      - traefik.http.routers.aigarth-web.entrypoints=websecure
+      - traefik.http.routers.aigarth-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.aigarth-web.priority=10
+      - traefik.http.services.aigarth-web.loadbalancer.server.port=3003
+      # Force HTTPS (Traefik already does this globally via the
+      # `web` entrypoint redirect, but we mirror the LML label style
+      # here for clarity).
+      # ---- Phase 28 halving launch: app/docs/api subdomain placeholders ----
+      # These subdomains return Traefik's default 404 until each surface
+      # ships. The wildcard A record is in place at hPanel so the DNS
+      # resolves; Traefik will pick up specific routes here as the
+      # gateway, dashboard, and app services come online. The web
+      # service is NOT the target — that would route all subdomains to
+      # the marketing site, which is wrong for app/docs/api.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  dashboard:
+    image: aigarth/dashboard:latest
+    container_name: aigarth-dashboard
+    <<: *app-base
+    environment:
+      PORT: 4000
+      APP_BASE_URL: https://aigarth.cloud
+      AIGARTH_IDENTITY_URL: http://identity:7001
+    # Traefik labels for the project-tracker dashboard. This is the
+    # aigarthcloud.lucidmindlabs.com origin: phases, deliveries, docs,
+    # services status, etc. Disabled by default (this router requires
+    # the *.aigarth.cloud wildcard to resolve, and we ship with the
+    # marketing site for the halving). Uncomment the labels block when
+    # the wildcard DNS is in place.
+    #
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.http.routers.aigarth-dashboard.rule=Host(`aigarth.cloud`) && (PathPrefix(`/phases`) || PathPrefix(`/deliveries`) || PathPrefix(`/docs`) || PathPrefix(`/services`))
+    #   - traefik.http.routers.aigarth-dashboard.entrypoints=websecure
+    #   - traefik.http.routers.aigarth-dashboard.tls.certresolver=letsencrypt
+    #   - traefik.http.routers.aigarth-dashboard.priority=20
+    #   - traefik.http.services.aigarth-dashboard.loadbalancer.server.port=4000
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ----------------------------------------------------------------------
+  # 301 redirect: aigarthcloud.lucidmindlabs.com -> aigarth.cloud.
+  # Implemented as a small static container that always returns 301.
+  # Activated only when the user adds the Namecheap A record; otherwise
+  # the DNS won't resolve and the rule is a no-op. To enable: change
+  # `profiles: ["never"]` to remove the profile, or override with
+  # `docker compose --profile launch-redirect up -d redirect-301`.
+  # ----------------------------------------------------------------------
+  redirect-301:
+    image: aigarth/redirect-301:latest
+    container_name: aigarth-redirect-301
+    profiles: ["launch-redirect"]
+    networks: [aigarth]
+    # The image is built from infrastructure/redirect-301/Dockerfile
+    # and serves a single 301 with the proper Location header.
+
+volumes:
+  aigarth-pgdata:
+  aigarth-redisdata:
+  aigarth-natsdata:
+  aigarth-miniodata:
+
+networks:
+  aigarth:
+    driver: bridge
+    name: aigarth-cloud-prod

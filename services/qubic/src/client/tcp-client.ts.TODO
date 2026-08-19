@@ -1,0 +1,47 @@
+# TCP Qubic Client (TODO)
+
+The "real" Qubic client speaks a custom binary TCP protocol to a
+running Qubic node. We don't ship it yet because:
+
+1. It requires a running Qubic node (or access to one)
+2. The binary protocol is detailed in the Qubic source and varies
+   between network versions
+3. Most local dev + CI workflows are happy with the stub
+
+## When you implement this
+
+```ts
+// src/client/tcp.ts
+import * as net from "node:net";
+import { QubicClient, ... } from "./types.js";
+
+export class TcpQubicClient implements QubicClient {
+  constructor(private opts: { host: string; port: number }) {}
+
+  private send<T>(payload: Buffer): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const socket = net.connect(this.opts.port, this.opts.host);
+      // ... write payload, read response, parse
+    });
+  }
+
+  async ping() { /* ... */ }
+  async getCurrentTick() { /* ... */ }
+  // ...
+}
+```
+
+## Protocol notes (from the Qubic source)
+
+- Each request has an 8-byte header: `[type: u32][size: u32][payload: bytes]`
+- Common request types: `BROADCAST_TRANSACTION` (0x10), `GET_CURRENT_TICK_INFO` (0x14), `GET_BALANCE` (0x18), `GET_TRANSACTIONS_BY_ADDRESS` (0x42)
+- Responses have a similar 8-byte header followed by a typed payload
+- The signature scheme is K12-based (see `services/identity/src/lib/qubic.ts` for context)
+
+## References
+
+- https://github.com/qubic/core (Qubic core implementation in C++)
+- https://docs.qubic.org/ (when it exists)
+- qubic-js (community TypeScript SDK, when it ships)
+
+Once this lands, add it to the factory in `client/index.ts`.

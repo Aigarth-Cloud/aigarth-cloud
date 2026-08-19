@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Aigarth</title>
+  <defs>
+    <linearGradient id="aigarthA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5eaaa8" />
+      <stop offset="100%" stop-color="#2E7D32" />
+    </linearGradient>
+  </defs>
+  <g fill="url(#aigarthA)">
+    <!-- Left leg of A: trapezoid widening toward the base -->
+    <polygon points="11,58 19,58 35,8 30,8" />
+    <!-- Right leg of A -->
+    <polygon points="45,58 53,58 34,8 29,8" />
+    <!-- Crossbar as a leaf-shaped lens (horizontal ellipse) -->
+    <ellipse cx="32" cy="40" rx="14" ry="3.2" />
+    <!-- Small leaf accent in the negative space above the crossbar -->
+    <path d="M32 18 C 36 20 36 26 32 28 C 28 26 28 20 32 18 Z" opacity="0.85" />
+  </g>
+</svg>

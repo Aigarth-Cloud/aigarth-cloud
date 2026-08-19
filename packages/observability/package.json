@@ -1,0 +1,32 @@
+{
+  "name": "@aigarth/observability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared observability helpers — Prometheus-format /metrics, HTTP request hooks, correlation IDs. Phase 13. Used by every Aigarth service.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "fastify": "^4.28.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

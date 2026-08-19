@@ -1,0 +1,62 @@
+{
+  "name": "@aigarth/trinary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trinary intelligence protocol v1 — the canonical IntentEnvelope shape, state machine, consensus algebra, and signed-decision helpers shared across every ANN, tissue, and orchestration path on Aigarth Cloud.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./state": {
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.js"
+    },
+    "./envelope": {
+      "types": "./dist/envelope.d.ts",
+      "import": "./dist/envelope.js"
+    },
+    "./signal": {
+      "types": "./dist/signal.d.ts",
+      "import": "./dist/signal.js"
+    },
+    "./canonicalize": {
+      "types": "./dist/canonicalize.d.ts",
+      "import": "./dist/canonicalize.js"
+    },
+    "./sign": {
+      "types": "./dist/sign.d.ts",
+      "import": "./dist/sign.js"
+    },
+    "./consensus": {
+      "types": "./dist/consensus.d.ts",
+      "import": "./dist/consensus.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && node scripts/strip-js-extensions.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "clean": "node scripts/clean.mjs"
+  },
+  "dependencies": {
+    "zod": "~3.23.8"
+  },
+  "devDependencies": {
+    "@aigarth/config": "workspace:*",
+    "@types/node": "^20.16.11",
+    "@vitest/coverage-v8": "^2.1.2",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

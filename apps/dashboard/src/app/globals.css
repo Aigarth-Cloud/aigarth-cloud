@@ -1,0 +1,8 @@
+/**
+ * Aigarth Tracker — global stylesheet.
+ *
+ * The design system is in @aigarth/ui. The dashboard only adds
+ * tracker-specific overrides here (currently none).
+ */
+
+@import "@aigarth/ui/styles.css";

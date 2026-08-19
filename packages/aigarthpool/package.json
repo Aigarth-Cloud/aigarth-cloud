@@ -1,0 +1,31 @@
+{
+  "name": "@aigarth/aigarthpool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AigarthPool client + in-process simulator. Mirrors the QPI contract spec for local dev; the real Qubic RPC client ships when AIO is available.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo dist"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

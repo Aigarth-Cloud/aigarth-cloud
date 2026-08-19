@@ -1,0 +1,76 @@
+# Repo-root .dockerignore for the Aigarth Cloud production build.
+# Used by Dockerfile.service and Dockerfile.app.
+
+# VCS + editor
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.err
+logs/
+workspace/
+data/
+
+# Build outputs we don't need to ship to the build context
+**/node_modules
+**/.next
+**/.next/**
+**/.turbo
+**/dist
+**/coverage
+**/.turbo-cache
+**/out
+
+# Aigarth runtime metadata (not needed in image)
+.aigarth/
+.previews/
+.netlify/
+.vercel/
+
+# Test + dev artifacts
+tests/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__/**
+**/__mocks__/**
+**/vitest.config.*
+**/jest.config.*
+
+# Lockfiles from subdirs we don't actually need (root lock is fine)
+**/pnpm-lock.yaml
+!/pnpm-lock.yaml
+
+# Env files
+.env
+.env.local
+.env.production
+.env.development
+**/.env
+**/.env.local
+**/.env.example
+
+# Documentation not needed at runtime
+docs/
+**/*.md
+!apps/web/app/**/*.md
+!apps/dashboard/app/**/*.md
+!apps/web/README.md
+!apps/dashboard/README.md
+!services/*/README.md
+!packages/*/README.md
+
+# Worktree + scratch
+tmp/
+tmp-*
+*.tmp
+*.bak
+*.bak-*

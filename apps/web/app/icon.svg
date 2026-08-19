@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Aigarth</title>
+  <defs>
+    <linearGradient id="aigarthAFav" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5eaaa8" />
+      <stop offset="100%" stop-color="#2E7D32" />
+    </linearGradient>
+    <linearGradient id="aigarthBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0F7F2" />
+      <stop offset="100%" stop-color="#D7E9D8" />
+    </linearGradient>
+  </defs>
+  <!-- Soft tinted rounded square so the favicon reads on any tab background -->
+  <rect width="64" height="64" rx="14" fill="url(#aigarthBg)" />
+  <g fill="url(#aigarthAFav)">
+    <polygon points="11,58 19,58 35,8 30,8" />
+    <polygon points="45,58 53,58 34,8 29,8" />
+    <ellipse cx="32" cy="40" rx="14" ry="3.2" />
+    <path d="M32 18 C 36 20 36 26 32 28 C 28 26 28 20 32 18 Z" opacity="0.85" />
+  </g>
+</svg>

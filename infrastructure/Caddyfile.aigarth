@@ -1,0 +1,64 @@
+# Caddyfile.aigarth — snippet loaded by the host Caddy.
+#
+# This file is dropped at /etc/caddy/Caddyfile.d/aigarth.caddy on the VPS
+# and `import`-ed by the main /etc/caddy/Caddyfile. The host Caddy is
+# already serving *.lucidmindlabs.com for the LML platform; this snippet
+# adds the Aigarth routes.
+#
+# Reverse-proxy targets assume the aigarth-cloud-prod compose is publishing
+# 3003 (web), 4000 (dashboard), and 7004 (gateway) to the host loopback.
+# Caddy uses ACME (Let's Encrypt) for TLS on aigarth.cloud and *.aigarth.cloud.
+#
+# After dropping this file, reload Caddy:
+#   sudo systemctl reload caddy
+#
+# To roll back:
+#   sudo rm /etc/caddy/Caddyfile.d/aigarth.caddy
+#   sudo systemctl reload caddy
+
+# ---------------------------------------------------------------------------
+# aigarth.cloud — public marketing site + customer dashboard + API gateway
+# ---------------------------------------------------------------------------
+aigarth.cloud, www.aigarth.cloud {
+    encode gzip zstd
+
+    # The Next.js app handles its own routing for the dashboard, auth pages,
+    # and the marketing site. Both are served from apps/web.
+    reverse_proxy localhost:3003
+
+    log {
+        output file /var/log/aigarth/caddy-aigarth.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# app.aigarth.cloud — future app surface (Phase B+). For now: friendly 503.
+# ---------------------------------------------------------------------------
+app.aigarth.cloud {
+    respond "Aigarth Cloud — app is in private beta. Join the waitlist at https://aigarth.cloud" 503
+}
+
+# ---------------------------------------------------------------------------
+# docs.aigarth.cloud — documentation site (Phase B+). For now: friendly 503.
+# ---------------------------------------------------------------------------
+docs.aigarth.cloud {
+    respond "Documentation is being migrated. In the meantime, see https://aigarth.cloud/docs" 503
+}
+
+# ---------------------------------------------------------------------------
+# api.aigarth.cloud — public API gateway. For now: friendly 503.
+# ---------------------------------------------------------------------------
+api.aigarth.cloud {
+    respond "Aigarth API is in private beta. Contact hello@aigarth.cloud for access" 503
+}
+
+# ---------------------------------------------------------------------------
+# aigarthcloud.lucidmindlabs.com — launch / technical origin.
+# 301-redirect everything to the canonical aigarth.cloud for now.
+# ---------------------------------------------------------------------------
+aigarthcloud.lucidmindlabs.com {
+    redir https://aigarth.cloud{uri} permanent
+}

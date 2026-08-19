@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@aigarth/ui": ["../../packages/ui/src/index.ts"],
+      "@aigarth/ui/*": ["../../packages/ui/src/*"],
+      "@aigarth/utils": ["../../packages/utils/src/index.ts"],
+      "@aigarth/utils/*": ["../../packages/utils/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next", "out", "dist", "scripts"]
+}

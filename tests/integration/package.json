@@ -1,0 +1,23 @@
+{
+  "name": "@aigarth/integration-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end integration tests that hit the live Aigarth Cloud stack. Run with `pnpm --filter @aigarth/integration-tests test`. Skipped gracefully if any service is down.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"lint not configured yet\" && exit 0"
+  },
+  "dependencies": {
+    "@aigarth/config": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.9"
+  }
+}

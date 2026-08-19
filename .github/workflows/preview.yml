@@ -1,0 +1,73 @@
+# Preview / per-app deploy workflow.
+#
+# Triggers on PRs that touch `apps/*` or `packages/*`. The actual
+# deploys use Vercel for Next.js apps (set up via the Vercel GitHub
+# app), so this workflow is intentionally minimal:
+#
+#   - Build every affected app on PR open / sync
+#   - Upload `.next` artifacts for inspection
+#   - Post a build-status comment
+#
+# Backend services (Phase 1+) will get their own deploy job that
+# builds + pushes a Docker image to the registry.
+
+name: Preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  build-affected:
+    name: Build affected apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build changed apps
+        # Build all apps in the affected set. Turborepo infers
+        # the dependency graph; we just need the inputs.
+        run: |
+          CHANGED=$(pnpm turbo run build --dry-run=json 2>/dev/null | jq -r '.tasks[] | select(.cache.status == "MISS") | .packageDir' | sort -u)
+          echo "Affected packages:"
+          echo "$CHANGED"
+          if [ -z "$CHANGED" ]; then
+            echo "No changes to build."
+            exit 0
+          fi
+          pnpm turbo run build --filter=...[origin/main]
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-build
+          path: |
+            apps/*/.next
+            packages/*/dist
+          if-no-files-found: ignore
+          retention-days: 3

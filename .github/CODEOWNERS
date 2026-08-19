@@ -1,0 +1,42 @@
+# CODEOWNERS — who reviews what.
+#
+# Last line that matches wins. Be deliberate: the more specific the
+# path, the higher priority it has.
+#
+# IMPORTANT: Replace @wescosmic with your real GitHub handle in the
+# Aigarth-Cloud org before the first PR. The handle listed below is the
+# owner of the org; org admins can also add co-reviewers by appending
+# more entries (the last match wins).
+
+# Default: the org owner reviews everything.
+/**                          @wescosmic
+
+# Frontend apps
+/apps/web/**                 @wescosmic
+/apps/dashboard/**           @wescosmic
+
+# Design system
+/packages/ui/**              @wescosmic
+/packages/utils/**           @wescosmic
+
+# SDK
+/packages/sdk/**             @wescosmic
+
+# Shared config
+/packages/config/**          @wescosmic
+
+# Backend services
+/services/**                 @wescosmic
+
+# Qubic smart contract
+/services/aigarthpool/contract/**  @wescosmic
+
+# Infrastructure
+/infrastructure/**           @wescosmic
+/infra/**                    @wescosmic
+/.github/**                  @wescosmic
+
+# Docs (anyone can edit)
+/docs/**                     @wescosmic
+/ROADMAP.md                  @wescosmic
+/README.md                   @wescosmic

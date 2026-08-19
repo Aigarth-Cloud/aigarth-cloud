@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+  - "examples/*"
+  - "tests/*"
+
+# Allow the workspace to reference packages that are still being prototyped
+# in apps or sub-packages during local development. In production we want
+# everything tracked and locked.
+onlyBuiltDependencies:
+  - "@tailwindcss/oxide"
+  - "esbuild"
+  - "sharp"
+  - "unrs-resolver"

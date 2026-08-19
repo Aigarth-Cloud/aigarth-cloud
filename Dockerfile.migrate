@@ -1,0 +1,71 @@
+# Dockerfile.migrate
+#
+# One-shot container that runs every service's `pnpm db:migrate` in dependency
+# order, then exits. Used during the initial deploy (after `docker compose up`
+# brings up postgres/redis/nats/minio) to seed the schema.
+#
+# Build:  docker buildx build --platform linux/amd64 -f Dockerfile.migrate \
+#           -t aigarth/migrate:latest --load .
+#
+# Run:    docker run --rm --network aigarth-cloud-prod_aigarth \
+#           --env-file /opt/aigarth/.env.production \
+#           aigarth/migrate:latest
+#
+# Exits 0 on full success, non-zero on the first migration that fails. The
+# services each have safe migrations (idempotent), so re-running this is fine.
+
+# syntax=docker/dockerfile:1.7
+FROM node:20-bookworm-slim
+ENV PNPM_HOME=/pnpm
+# pnpm's hoisted layout puts CLI shims under node_modules/.pnpm/.bin/.
+# tsx (the dev dep the db:migrate scripts invoke) is there, not under
+# the top-level node_modules/.bin/. We put the .pnpm bin dir on PATH
+# so `tsx ...` resolves from any service subdirectory.
+ENV PATH=/pnpm:/repo/node_modules/.pnpm/node_modules/.bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV NODE_ENV=production
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+WORKDIR /repo
+
+# We need source (migrations use tsx) AND the drizzle/ folders next to them.
+# We do NOT need the built dist/ — migrations are run from source.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY tsconfig.base.json turbo.json ./
+COPY packages/ packages/
+COPY services/ services/
+COPY apps/ apps/
+
+# Full install (devDeps include tsx which runs the migrations)
+RUN --mount=type=cache,target=/pnpm/store,id=pnpm-store \
+    pnpm install --frozen-lockfile
+
+# Run all migrations in dependency order. Fail fast on any error.
+# Order: identity (no deps) -> ann -> tissue -> training -> billing
+#        -> marketplace -> dataset -> economy -> compute -> gateway
+#        -> qubic -> work.
+#
+# pnpm --filter changes cwd to the service directory before running
+# the script, so the relative `--env-file=.env` resolves against the
+# service's dir. We stage the .env file there from /repo/.env (which
+# the compose mounts from the host's /opt/aigarth/.env.production).
+#
+# Pre-deploy patch: the tissue service's 0001_daily_zombie.sql
+# redeclares ENUM types that 0000_tissue_init.sql already created.
+# When Drizzle runs 0000 in its own transaction, the types persist;
+# 0001 then fails on `CREATE TYPE tissue_member_role` because the
+# type already exists. The 0001 file is a Phase 19A follow-up
+# (audit_logs + decisions tables) and the type declarations are
+# duplicates of 0000 — strip them. Tracked as a project bug for a
+# proper fix (drizzle-kit should be the source of truth; the hand-
+# written type declarations in 0001 are wrong).
+CMD ["sh", "-c", "set -e; \
+  if [ -f /repo/services/tissue/drizzle/0001_daily_zombie.sql ]; then \
+    sed -i '/CREATE TYPE \"public\"\\.\\\"tissue_/d' /repo/services/tissue/drizzle/0001_daily_zombie.sql 2>/dev/null || true; \
+    sed -i '/CREATE TYPE public\\.tissue_/d' /repo/services/tissue/drizzle/0001_daily_zombie.sql 2>/dev/null || true; \
+  fi; \
+  for svc in identity ann tissue training billing marketplace dataset economy compute gateway qubic work; do \
+    echo \"--- migrating @aigarth/$svc ---\"; \
+    if [ -f /repo/.env ]; then cp /repo/.env /repo/services/$svc/.env; fi; \
+    cd /repo; \
+    pnpm --filter @aigarth/$svc db:migrate; \
+  done; \
+  echo 'All migrations applied'"]

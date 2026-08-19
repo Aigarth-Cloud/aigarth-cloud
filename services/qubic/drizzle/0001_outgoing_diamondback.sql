@@ -1,0 +1,1 @@
+ALTER TABLE "stakes" ADD COLUMN "receiver_address" text NOT NULL;

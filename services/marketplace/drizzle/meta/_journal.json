@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785259644928,
+      "tag": "0000_romantic_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785260066836,
+      "tag": "0001_fixed_logan",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785867882119,
+      "tag": "0002_mature_radioactive_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786648034853,
+      "tag": "0003_motionless_shotgun",
+      "breakpoints": true
+    }
+  ]
+}

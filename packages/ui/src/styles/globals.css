@@ -1,0 +1,340 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ------------------------------------------------------------------ */
+  /*  GARDEN (default) — botanical, warm, premium                       */
+  /* ------------------------------------------------------------------ */
+  :root {
+    --background: 60 9% 98%;
+    --foreground: 140 30% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 140 30% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 140 30% 8%;
+
+    --primary: 134 50% 34%;       /* Garden Green #2E7D32 */
+    --primary-foreground: 60 9% 98%;
+
+    --secondary: 130 20% 95%;
+    --secondary-foreground: 140 30% 14%;
+
+    --muted: 130 12% 94%;
+    --muted-foreground: 130 10% 40%;
+
+    --accent: 134 30% 90%;
+    --accent-foreground: 134 50% 22%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 130 12% 90%;
+    --input: 130 12% 90%;
+    --ring: 134 50% 34%;
+
+    --radius: 0.75rem;
+
+    /* Brand color scale (Garden) */
+    --brand-50: 134 50% 97%;
+    --brand-100: 134 50% 92%;
+    --brand-200: 134 45% 84%;
+    --brand-300: 134 45% 70%;
+    --brand-400: 134 50% 55%;
+    --brand-500: 134 50% 34%;
+    --brand-600: 134 55% 28%;
+    --brand-700: 134 60% 22%;
+    --brand-800: 134 55% 16%;
+    --brand-900: 134 50% 11%;
+
+    /* Gradient stops */
+    --gradient-from: 134 60% 35%;
+    --gradient-mid: 134 50% 45%;
+    --gradient-to: 170 60% 45%;
+
+    /* Mesh gradient stops */
+    --mesh-1: 134 50% 34%;
+    --mesh-2: 160 70% 50%;
+    --mesh-3: 180 50% 50%;
+    --mesh-4: 120 50% 50%;
+    --mesh-5: 150 50% 50%;
+  }
+
+  .dark {
+    --background: 150 18% 5%;
+    --foreground: 130 12% 94%;
+
+    --card: 150 16% 7%;
+    --card-foreground: 130 12% 94%;
+
+    --popover: 150 16% 7%;
+    --popover-foreground: 130 12% 94%;
+
+    --primary: 134 45% 52%;
+    --primary-foreground: 150 18% 5%;
+
+    --secondary: 150 14% 12%;
+    --secondary-foreground: 130 12% 94%;
+
+    --muted: 150 14% 12%;
+    --muted-foreground: 130 10% 64%;
+
+    --accent: 150 14% 14%;
+    --accent-foreground: 134 45% 70%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 12% 16%;
+    --input: 150 12% 16%;
+    --ring: 134 45% 52%;
+
+    --brand-50: 150 18% 5%;
+    --brand-100: 150 16% 9%;
+    --brand-500: 134 45% 52%;
+    --brand-600: 134 45% 60%;
+    --brand-700: 134 50% 70%;
+
+    --gradient-from: 134 60% 50%;
+    --gradient-mid: 134 50% 60%;
+    --gradient-to: 170 60% 55%;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  QUBIC — cosmic, electric, technical (matches qubic.org)          */
+  /* ------------------------------------------------------------------ */
+  :root[data-brand="qubic"] {
+    --background: 220 35% 96%;
+    --foreground: 220 35% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 35% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 35% 8%;
+
+    --primary: 187 73% 50%;         /* Qubic cyan #25CAD9 */
+    --primary-foreground: 220 35% 7%;
+
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 220 35% 14%;
+
+    --muted: 220 18% 93%;
+    --muted-foreground: 220 15% 42%;
+
+    --accent: 40 100% 88%;          /* Warm cream #FFDEA1 */
+    --accent-foreground: 40 50% 22%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 187 73% 50%;
+
+    /* Brand color scale (Qubic — cyan primary) */
+    --brand-50: 187 73% 96%;
+    --brand-100: 187 73% 90%;
+    --brand-200: 187 70% 80%;
+    --brand-300: 187 70% 68%;
+    --brand-400: 187 73% 58%;
+    --brand-500: 187 73% 50%;       /* #25CAD9 */
+    --brand-600: 189 80% 42%;
+    --brand-700: 191 90% 32%;
+    --brand-800: 195 85% 24%;
+    --brand-900: 200 70% 16%;
+
+    --gradient-from: 187 73% 50%;
+    --gradient-mid: 189 99% 69%;
+    --gradient-to: 40 100% 78%;
+
+    --mesh-1: 187 73% 50%;
+    --mesh-2: 189 99% 69%;
+    --mesh-3: 40 100% 78%;
+    --mesh-4: 191 90% 32%;
+    --mesh-5: 187 60% 60%;
+  }
+
+  .dark[data-brand="qubic"] {
+    /* Cosmic dark — matches qubic.org background #0D121C */
+    --background: 220 35% 7%;       /* #0D121C */
+    --foreground: 45 89% 95%;       /* Warm off-white #FEF8E8 */
+
+    --card: 220 30% 9%;
+    --card-foreground: 45 89% 95%;
+
+    --popover: 220 30% 9%;
+    --popover-foreground: 45 89% 95%;
+
+    --primary: 187 73% 50%;         /* Qubic cyan #25CAD9 */
+    --primary-foreground: 220 35% 7%;
+
+    --secondary: 220 20% 13%;
+    --secondary-foreground: 45 89% 95%;
+
+    --muted: 220 20% 13%;
+    --muted-foreground: 220 10% 65%;
+
+    --accent: 40 100% 82%;          /* Warm cream #FFDEA1 */
+    --accent-foreground: 40 50% 18%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 15%;
+    --input: 220 20% 15%;
+    --ring: 187 73% 50%;
+
+    --brand-50: 220 35% 7%;
+    --brand-100: 220 30% 11%;
+    --brand-500: 187 73% 50%;
+    --brand-600: 189 80% 60%;
+    --brand-700: 189 99% 69%;
+
+    /* Gradient: cyan → light cyan → warm cream (Qubic signature trio) */
+    --gradient-from: 187 73% 50%;
+    --gradient-mid: 189 99% 69%;
+    --gradient-to: 40 100% 78%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11", "kern";
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.2);
+  }
+}
+
+@layer components {
+  .container-narrow {
+    @apply mx-auto w-full max-w-4xl px-6;
+  }
+
+  .container-wide {
+    @apply mx-auto w-full max-w-7xl px-6;
+  }
+
+  .container-prose {
+    @apply mx-auto w-full max-w-3xl px-6;
+  }
+
+  /* Mesh background — brand-aware */
+  .bg-garden-mesh,
+  .bg-brand-mesh {
+    background-image:
+      radial-gradient(at 27% 37%, hsla(var(--mesh-1), 0.08) 0px, transparent 50%),
+      radial-gradient(at 97% 21%, hsla(var(--mesh-2), 0.06) 0px, transparent 50%),
+      radial-gradient(at 52% 99%, hsla(var(--mesh-3), 0.05) 0px, transparent 50%),
+      radial-gradient(at 10% 29%, hsla(var(--mesh-4), 0.05) 0px, transparent 50%);
+  }
+
+  .dark .bg-garden-mesh,
+  .dark .bg-brand-mesh {
+    background-image:
+      radial-gradient(at 27% 37%, hsla(var(--mesh-1), 0.10) 0px, transparent 50%),
+      radial-gradient(at 97% 21%, hsla(var(--mesh-2), 0.08) 0px, transparent 50%),
+      radial-gradient(at 52% 99%, hsla(var(--mesh-3), 0.06) 0px, transparent 50%),
+      radial-gradient(at 10% 29%, hsla(var(--mesh-4), 0.05) 0px, transparent 50%);
+  }
+
+  /* Subtle grid for backgrounds */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .bg-dot-pattern {
+    background-image: radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Text balance for headings */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Premium button feel */
+  .btn-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.1),
+      0 8px 24px -8px hsl(var(--primary) / 0.4);
+  }
+
+  /* Glass effect for nav */
+  .glass {
+    background: hsl(var(--background) / 0.7);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  /* Card hover lift */
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5;
+    box-shadow:
+      0 0 0 1px hsl(var(--border)),
+      0 12px 32px -12px hsl(var(--foreground) / 0.12);
+  }
+
+  /* Code block styling */
+  .prose-code-block {
+    @apply rounded-lg border bg-stone-50 dark:bg-stone-900/50 px-4 py-3 text-sm;
+  }
+}
+
+@layer utilities {
+  /* Brand-aware gradient text (replaces text-gradient-garden, also keeps old name) */
+  .text-gradient-garden,
+  .text-gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--gradient-from)) 0%, hsl(var(--gradient-mid)) 50%, hsl(var(--gradient-to)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .text-gradient-mint {
+    background: linear-gradient(135deg, hsl(160 70% 50%) 0%, hsl(134 50% 50%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .text-gradient-qubic {
+    background: linear-gradient(135deg, hsl(195 100% 60%) 0%, hsl(214 100% 70%) 50%, hsl(270 90% 70%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Subtle ring */
+  .ring-garden,
+  .ring-brand {
+    --tw-ring-color: hsl(var(--primary) / 0.5);
+  }
+}

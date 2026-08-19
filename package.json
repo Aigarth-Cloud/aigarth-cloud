@@ -1,0 +1,42 @@
+{
+  "name": "aigarth-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aigarth Cloud — a production AI cloud on Qubic. Monorepo root.",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@aigarth/web",
+    "dev:dashboard": "turbo run dev --filter=@aigarth/dashboard",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "pnpm --filter @aigarth/integration-tests test",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json,yaml,yml}\" --ignore-path .gitignore",
+    "stack:up": "docker compose -f infrastructure/docker-compose.yml up -d",
+    "stack:up:devnet": "docker compose -f infrastructure/docker-compose.yml --profile qubic-devnet up -d",
+    "stack:down": "docker compose -f infrastructure/docker-compose.yml down",
+    "stack:logs": "docker compose -f infrastructure/docker-compose.yml logs -f",
+    "stack:ps": "docker compose -f infrastructure/docker-compose.yml ps",
+    "stack:dev": "node scripts/stack-dev.mjs",
+    "stack:reset": "docker compose -f infrastructure/docker-compose.yml down -v && docker compose -f infrastructure/docker-compose.yml up -d"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "prettier": "^3.3.3",
+    "turbo": "^2.1.3",
+    "typescript": "^5.6.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "zod": "~3.23.8"
+    }
+  }
+}

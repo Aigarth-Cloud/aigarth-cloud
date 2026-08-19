@@ -1,0 +1,16 @@
+{
+  "name": "aigarth-node-chat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Express chat demo using @aigarth/sdk.",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "@aigarth/sdk": "workspace:*",
+    "express": "^4.21.0"
+  }
+}

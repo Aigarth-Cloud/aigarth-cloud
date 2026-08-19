@@ -1,0 +1,84 @@
+# Dockerfile.service
+#
+# Production image for the 12 Aigarth Cloud services (identity, qubic, compute,
+# gateway, billing, ann, marketplace, tissue, dataset, economy, training, work).
+#
+# Build:  docker buildx build --platform linux/amd64 \
+#           --build-arg SERVICE=identity \
+#           -f Dockerfile.service -t aigarth/identity:latest --load .
+#
+# Run:    docker run --rm aigarth/identity:latest
+#         (compose sets PORT and loads /opt/aigarth/.env.production)
+#
+# Multi-stage: stage 1 installs the full workspace, builds the service, prunes
+# to production-only deps. Stage 2 is a slim runtime with just the deploy output.
+
+# syntax=docker/dockerfile:1.7
+ARG SERVICE=identity
+
+FROM node:20-bookworm-slim AS builder
+ARG SERVICE
+ENV PNPM_HOME=/pnpm
+ENV PATH=/pnpm:$PATH
+RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
+WORKDIR /repo
+
+# Copy lockfile + manifest first so the install layer is cacheable
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
+COPY tsconfig.base.json turbo.json ./
+COPY packages/ packages/
+COPY services/ services/
+COPY apps/ apps/
+
+# Install all deps (dev + prod) — needed to build. Use a buildkit
+# cache mount on the pnpm store so the second service we build (and
+# the third, ...) reuses the downloaded packages.
+RUN --mount=type=cache,target=/pnpm/store,id=pnpm-store \
+    pnpm install --frozen-lockfile
+
+# Build the service and any workspace deps it pulls in. Same cache
+# mount so intermediate build outputs from the workspace deps are
+# reused across services.
+RUN --mount=type=cache,target=/pnpm/store,id=pnpm-store \
+    --mount=type=cache,target=/repo/.turbo,id=turbo-cache \
+    pnpm --filter @aigarth/${SERVICE}... build
+
+# Produce a self-contained production bundle (service + prod node_modules +
+# workspace package dists it needs at runtime). `pnpm deploy` writes everything
+# into a single clean dir we can COPY into the runtime stage.
+RUN pnpm --filter @aigarth/${SERVICE} --prod deploy /out
+# `pnpm deploy` for a workspace package only copies the source tree — it
+# does NOT include the `dist/` build output we just produced (the build
+# ran in /repo, but pnpm deploy copies the package files, not generated
+# artifacts). Copy the dist/ into /out so the runtime CMD (`node
+# dist/index.js`) finds it.
+RUN cp -r /repo/services/${SERVICE}/dist /out/dist
+
+# ---- runtime stage ----
+FROM node:20-bookworm-slim AS runtime
+ARG SERVICE
+ENV NODE_ENV=production
+WORKDIR /app
+
+# Minimal runtime deps for postgres connections + dns + curl healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the deploy output (includes dist/ and prod node_modules)
+COPY --from=builder /out /app
+
+# Run as non-root
+RUN groupadd --system --gid 1001 aigarth \
+    && useradd --system --uid 1001 --gid aigarth --shell /sbin/nologin aigarth \
+    && chown -R aigarth:aigarth /app
+USER aigarth
+
+# Each service reads PORT from env. The compose file sets it per service.
+EXPOSE 7000
+
+# Healthcheck is a per-service concern (compose overrides this)
+HEALTHCHECK NONE
+
+# Default command — overridden by docker-compose per service
+CMD ["node", "dist/index.js"]

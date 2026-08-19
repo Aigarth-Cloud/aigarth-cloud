@@ -1,0 +1,39 @@
+/**
+ * Aigarth Cloud — global stylesheet.
+ *
+ * All design tokens and component classes live in @aigarth/ui.
+ * This file is the app entry-point that re-exports the design system.
+ *
+ * Brand switching: <html data-brand="garden | qubic" class="dark">
+ *   - data-brand switches the color palette (--primary, --background, etc.)
+ *   - .dark switches between light and dark mode
+ *   - ThemeSelector (apps/web/components/shared) does this for you.
+ */
+
+@import "@aigarth/ui/styles.css";
+
+/* ---- Font CSS variables (Phase 28 production deploy) --------------------
+ *
+ * Originally wired via `next/font/google` in apps/web/app/layout.tsx
+ * (Inter, JetBrains Mono, Instrument Serif, Space Grotesk). The Docker
+ * build environment cannot reach fonts.googleapis.com reliably from
+ * buildkit's network namespace, so the next/font fetch fails with
+ * "socket hang up" / "TLS connection closed" and the prerender crashes.
+ *
+ * As a deploy-blocker fix, we set the font variables directly here with
+ * system font stacks. The Tailwind preset's font family chain is
+ * `var(--font-sans)` -> `system-ui` -> `sans-serif`, so the visual
+ * difference from the dev environment is small. Restore the next/font
+ * imports once the build environment has reliable outbound HTTPS to
+ * fonts.gstatic.com (track in Phase 29).
+ */
+:root {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --font-serif: Georgia, "Times New Roman", Times, serif;
+  --font-display: var(--font-sans);
+}
+
+/* App-level overrides go here. Keep the design system source clean. */

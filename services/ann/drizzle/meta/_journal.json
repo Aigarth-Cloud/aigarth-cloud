@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785257137959,
+      "tag": "0000_modern_gabe_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785258582080,
+      "tag": "0001_ann_gap_closing",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785867989111,
+      "tag": "0002_hot_stone_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786206592501,
+      "tag": "0003_faulty_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786207894327,
+      "tag": "0004_old_kate_bishop",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786211008523,
+      "tag": "0005_gorgeous_lockheed",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786585769447,
+      "tag": "0006_calm_cerebro",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786585818489,
+      "tag": "0007_ambitious_mordo",
+      "breakpoints": true
+    }
+  ]
+}

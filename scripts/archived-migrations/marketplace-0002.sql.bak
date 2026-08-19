@@ -1,0 +1,47 @@
+-- Phase 18E — Tissue decision listings.
+--
+-- A separate `mkt_tissue_listings` table for the new product
+-- type. See ADR 003 for the protocol rationale.
+
+CREATE TYPE "mkt_tissue_access" AS ENUM ('open', 'licensed');
+
+CREATE TABLE "mkt_tissue_listings" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "slug" text NOT NULL,
+  "title" text NOT NULL,
+  "description" text,
+  "icon" text,
+  "tags" jsonb NOT NULL DEFAULT '[]'::jsonb,
+
+  "seller_user_id" uuid NOT NULL,
+  "seller_org_id" uuid,
+  "seller_name" text NOT NULL,
+
+  "tissue_slug" text NOT NULL,
+  "tissue_id" uuid,
+  "tissue_version" text NOT NULL,
+  "tissue_name" text NOT NULL,
+
+  "price_per_decision_qubic" bigint NOT NULL,
+
+  "access" "mkt_tissue_access" NOT NULL DEFAULT 'open',
+
+  "status" "mkt_listing_status" NOT NULL DEFAULT 'draft',
+  "visibility" "mkt_listing_visibility" NOT NULL DEFAULT 'public',
+
+  "total_decisions" bigint NOT NULL DEFAULT 0,
+  "total_revenue_qubic" bigint NOT NULL DEFAULT 0,
+  "rating_average" text,
+  "rating_count" integer NOT NULL DEFAULT 0,
+
+  "published_at" timestamptz,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX "mkt_tissue_listings_slug_idx" ON "mkt_tissue_listings" ("slug");
+CREATE INDEX "mkt_tissue_listings_status_idx" ON "mkt_tissue_listings" ("status");
+CREATE INDEX "mkt_tissue_listings_visibility_idx" ON "mkt_tissue_listings" ("visibility");
+CREATE INDEX "mkt_tissue_listings_seller_idx" ON "mkt_tissue_listings" ("seller_user_id");
+CREATE INDEX "mkt_tissue_listings_tissue_slug_idx" ON "mkt_tissue_listings" ("tissue_slug");
+CREATE INDEX "mkt_tissue_listings_access_idx" ON "mkt_tissue_listings" ("access");
