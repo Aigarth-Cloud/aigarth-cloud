@@ -16,12 +16,26 @@ const VALUES = [
 ];
 
 const TEAM = [
-  { name: "Elena Voss", role: "CEO & Co-founder", prev: "Previously: VP Engineering, Stripe" },
-  { name: "Marcus Tao", role: "CTO & Co-founder", prev: "Previously: Principal Engineer, Anthropic" },
-  { name: "Sana Okonkwo", role: "Chief Design Officer", prev: "Previously: Head of Design, Linear" },
-  { name: "Daniel Reyes", role: "VP Product", prev: "Previously: Group PM, OpenAI" },
-  { name: "Yuki Tanaka", role: "VP Research", prev: "Previously: Research Lead, DeepMind" },
-  { name: "Liam O'Brien", role: "VP Engineering", prev: "Previously: Director of Engineering, Vercel" },
+  {
+    name: "Wesley Gervais",
+    role: "Community Builder",
+    prev: "Founder of Lucid Mind Labs. Hosts the Aigarth Cloud community, runs the build process end to end.",
+  },
+  {
+    name: "Engineering Agent",
+    role: "Engineering",
+    prev: "Builds the platform. 12 services, 7 primitives, 600+ tests. Ships the code, runs the typechecker, signs off on every wave.",
+  },
+  {
+    name: "Marketing Agent",
+    role: "Marketing",
+    prev: "Writes the copy, the blog posts, the case studies, the social. Stays inside the brand-voice rules.",
+  },
+  {
+    name: "Support Agent",
+    role: "Support",
+    prev: "First-line customer comms, community triage, FAQ generation, escalation to the founder when needed.",
+  },
 ];
 
 export default function AboutPage() {
@@ -54,7 +68,7 @@ export default function AboutPage() {
 
       <Section
         title="Team"
-        description="Engineers, designers, and researchers from the companies that defined modern AI."
+        description="One human, three agents, one shared job: build the AI cloud on Qubic."
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {TEAM.map((m) => (
