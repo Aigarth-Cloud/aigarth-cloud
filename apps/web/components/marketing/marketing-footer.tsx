@@ -1,6 +1,22 @@
 import Link from "next/link";
 import { LogoFull } from "@/components/brand/logo";
-import { Github, Twitter, Linkedin, MessageCircle } from "lucide-react";
+import { Github, MessageCircle } from "lucide-react";
+
+// X (formerly Twitter) — lucide-react v0.451 doesn't ship a plain `X` brand
+// icon, so we inline the official glyph here. Inherits currentColor so the
+// hover styles in the parent <a> keep working.
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
 
 const groups = [
   {
@@ -77,10 +93,9 @@ export function MarketingFooter() {
             </p>
             <div className="mt-6 flex items-center gap-2">
               {[
-                { icon: Github, href: "https://github.com/aigarthcloud", label: "GitHub" },
-                { icon: Twitter, href: "https://twitter.com/aigarthcloud", label: "Twitter" },
-                { icon: Linkedin, href: "https://linkedin.com/company/aigarthcloud", label: "LinkedIn" },
-                { icon: MessageCircle, href: "https://discord.gg/aigarth", label: "Discord" },
+                { icon: Github, href: "https://github.com/Aigarth-Cloud", label: "GitHub" },
+                { icon: XIcon, href: "https://x.com/wescosmic", label: "X" },
+                { icon: MessageCircle, href: "https://discord.gg/FUQ9xsHqs", label: "Discord" },
               ].map(({ icon: Icon, href, label }) => (
                 <a
                   key={label}
