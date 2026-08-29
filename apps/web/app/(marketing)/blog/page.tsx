@@ -11,6 +11,16 @@ export const metadata = {
 
 const POSTS = [
   {
+    title: "From registry to execution: shipping the Execution Router",
+    excerpt:
+      "A registered ANN can now run locally or through Qubic OC, with the same manifest hash, the same input, and a deterministic result hash. Here is what we built and why it is the bridge to a real decentralized compute economy.",
+    category: "Engineering",
+    author: "Aigarth Cloud Team",
+    date: "Aug 28, 2026",
+    readTime: "8 min",
+    href: "/blog/execution-router-ann-to-qubic-oc",
+  },
+  {
     title: "Epoch 227: a Qubic halving, and a marker for Aigarth Cloud",
     excerpt:
       "On August 19, 2026, Qubic enters its second halving. We have spent the last eight months building Aigarth Cloud. This is the moment we mark it in public.",
