@@ -1584,8 +1584,8 @@ const post8: Post = {
         If the OC service is down, the executor throws. The
         route returns 503. The UI does not silently fall back
         to local. A failed decentralized execution must remain
-        visibly failed. This is the rule we wrote down in the
-        superprompt and the rule we kept.
+        visibly failed. This is the rule we wrote down at the
+        start of the project, and the rule we kept.
       </Para>
 
       <h2 className={H2_CLASS}>The Work Runtime is the engine, not a wrapper</h2>

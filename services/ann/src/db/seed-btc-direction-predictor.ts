@@ -77,7 +77,7 @@ const BTC_DIRECTION_PREDICTOR_MANIFEST: AnnManifest = buildManifest({
   commit: "0".repeat(40),
   license: "Apache-2.0",
   description:
-    "Demo ANN for the Phase 29 superprompt. Predicts next-5d BTC direction from a 30-day price window using a trivial 5-day momentum rule. Not a real model — its job is to prove the ANN → Execution Router → local + Qubic OC pipeline end-to-end.",
+    "Demo ANN that ships with the Phase 29 Execution Router release. Predicts next-5d BTC direction from a 30-day price window using a trivial 5-day momentum rule. Not a real model — its job is to prove the ANN → Execution Router → local + Qubic OC pipeline end-to-end.",
 });
 
 async function getCategoryId(slug: string): Promise<string | null> {
