@@ -24,6 +24,14 @@ export const auditAction = {
   decisionEmitted: "ann.decision_emitted",
   /** Phase 19D.1 — a caller recorded the real-world outcome of a decision. */
   decisionOutcomeRecorded: "ann.decision_outcome_recorded",
+  /** Phase 29 — an ANN execution was submitted to the Execution Router. */
+  executionSubmitted: "ann.execution.submitted",
+  /** Phase 29 — an ANN execution completed (any target, any status). */
+  executionCompleted: "ann.execution.completed",
+  /** Phase 29 — an ANN execution was verified (OC target, replicas agreed). */
+  executionVerified: "ann.execution.verified",
+  /** Phase 29 — an ANN execution failed (any target). */
+  executionFailed: "ann.execution.failed",
 } as const;
 
 export interface AuditEvent {

@@ -14,3 +14,4 @@ export { ComputeResource } from "./compute.js";
 export { BillingResource } from "./billing.js";
 export { MarketplaceResource } from "./marketplace.js";
 export { KeysResource } from "./keys.js";
+export { OcProcessors, type OcProcessorSummary } from "./oc-processors.js";

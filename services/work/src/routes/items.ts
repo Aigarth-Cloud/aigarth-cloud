@@ -207,7 +207,12 @@ export async function itemRoutes(app: FastifyInstance) {
 
 // ---------- Serialization ----------
 
-function serializeWorkItem(item: {
+/**
+ * Exported so the internal route (`/v1/internal/work/items`) can
+ * re-use the canonical wire shape. The function is the same one
+ * the public GET/POST routes use.
+ */
+export function serializeWorkItem(item: {
   workId: string;
   type: string;
   specVersion: number;

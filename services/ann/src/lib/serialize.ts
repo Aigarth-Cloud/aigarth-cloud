@@ -14,6 +14,26 @@ import type {
   AnnRetrainEvent,
 } from "../db/schema.js";
 
+/**
+ * Stable JSON stringify with sorted keys. Used by the Execution
+ * Router for canonicalising input + output before hashing. The
+ * local stub backend (`services/ann/src/backends/stub.ts`) has its
+ * own copy of this function; the version here is exported for
+ * cross-service callers (e.g. the QubicOCExecutor).
+ */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_k, v) => {
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      const sorted: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+        sorted[k] = (v as Record<string, unknown>)[k];
+      }
+      return sorted;
+    }
+    return v;
+  });
+}
+
 export function serializeAnn(a: Ann) {
   return {
     id: a.id,

@@ -1,4 +1,4 @@
-import { BaseResource, toQueryString } from "./_base.js";
+﻿import { BaseResource, toQueryString } from "./_base.js";
 import type { Ann, AnnReview, ListAnnsParams, ListAnnsResponse } from "../types/ann.js";
 
 /**
@@ -141,5 +141,129 @@ export class Anns extends BaseResource {
     return this.request(`/v1/anns/${encodeURIComponent(idOrSlug)}/stats`, {
       method: "GET",
     });
+  }
+
+  // -----------------------------------------------------------------
+  // Phase 29 — Execution Router (see services/ann/src/services/execution/)
+  // -----------------------------------------------------------------
+
+  async execute(
+    idOrSlug: string,
+    params: {
+      manifestHash: string;
+      version: string;
+      target: "local" | "qubic_oc";
+      requestId: string;
+      input: Record<string, unknown>;
+      parameters?: {
+        timeoutMs?: number;
+        replicas?: number;
+        deterministic?: boolean;
+        rewardQubic?: string;
+      };
+    },
+  ): Promise<{ execution_id: string; status: string }> {
+    return this.request(`/v1/anns/${encodeURIComponent(idOrSlug)}/execute`, {
+      method: "POST",
+      body: JSON.stringify({
+        manifest_hash: params.manifestHash,
+        version: params.version,
+        target: params.target,
+        request_id: params.requestId,
+        input: params.input,
+        ...(params.parameters
+          ? {
+              parameters: {
+                ...(params.parameters.timeoutMs !== undefined
+                  ? { timeout_ms: params.parameters.timeoutMs }
+                  : {}),
+                ...(params.parameters.replicas !== undefined
+                  ? { replicas: params.parameters.replicas }
+                  : {}),
+                ...(params.parameters.deterministic !== undefined
+                  ? { deterministic: params.parameters.deterministic }
+                  : {}),
+                ...(params.parameters.rewardQubic
+                  ? { reward_qubic: params.parameters.rewardQubic }
+                  : {}),
+              },
+            }
+          : {}),
+      }),
+    });
+  }
+
+  async listExecutions(
+    idOrSlug: string,
+    params: { status?: "queued" | "running" | "completed" | "failed"; target?: "local" | "qubic_oc"; limit?: number; offset?: number } = {},
+  ): Promise<{
+    data: Array<{
+      execution_id: string;
+      ann_id: string;
+      ann_version: string;
+      manifest_hash: string;
+      request_id: string;
+      target: "local" | "qubic_oc";
+      status: "queued" | "running" | "completed" | "failed";
+      result_hash: string | null;
+      work_id: string | null;
+      verification_status: string;
+      error: string | null;
+      started_at: string;
+      completed_at: string | null;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const query = new URLSearchParams();
+    if (params.status) query.set("status", params.status);
+    if (params.target) query.set("target", params.target);
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.offset !== undefined) query.set("offset", String(params.offset));
+    const q = query.toString();
+    return this.request(`/v1/anns/${encodeURIComponent(idOrSlug)}/executions${q ? `?${q}` : ""}`, { method: "GET" });
+  }
+
+  async getExecution(
+    idOrSlug: string,
+    executionId: string,
+  ): Promise<{
+    execution_id: string;
+    ann_id: string;
+    ann_version: string;
+    manifest_hash: string;
+    target: "local" | "qubic_oc";
+    status: "queued" | "running" | "completed" | "failed";
+    output: Record<string, unknown> | null;
+    result_hash: string | null;
+    work_id: string | null;
+    verification_status: string;
+    error: string | null;
+    started_at: string;
+    completed_at: string | null;
+  }> {
+    return this.request(
+      `/v1/anns/${encodeURIComponent(idOrSlug)}/executions/${encodeURIComponent(executionId)}`,
+      { method: "GET" },
+    );
+  }
+
+  async listRepositories(idOrSlug: string): Promise<{
+    data: Array<{
+      id: string;
+      ann_id: string;
+      ann_version_id: string;
+      repo_owner: string;
+      repo_name: string;
+      commit_sha: string;
+      manifest_hash: string;
+      release_tag: string | null;
+      release_url: string | null;
+      publication_kind: "seed" | "github_app";
+      published_at: string;
+    }>;
+  }> {
+    return this.request(`/v1/anns/${encodeURIComponent(idOrSlug)}/repositories`, { method: "GET" });
   }
 }

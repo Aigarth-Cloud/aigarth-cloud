@@ -985,3 +985,242 @@ export type OrganismFitnessHistory = typeof organismFitnessHistory.$inferSelect;
 export type NewOrganismFitnessHistory = typeof organismFitnessHistory.$inferInsert;
 export type OrganismVisibility = (typeof organismVisibility.enumValues)[number];
 export type OrganismStatus = (typeof organismStatus.enumValues)[number];
+
+// ---------- Phase 29 — Execution Router (superprompt §6) ----------
+//
+// The Execution Router is the abstraction that lets the same ANN
+// be run locally (in-process) or through Qubic Outsourced Computation
+// (services/work). Four new tables:
+//
+//   ann_executions       — the per-ANN execution log (one row per run)
+//   ann_repositories     — GitHub publication provenance per ANN version
+//   ann_economic_policies — burn/stream_burn/split policy definitions (Phase 9/10 schema only)
+//   ann_epochs           — epoch governance scaffolding (Phase 9/10 schema only)
+//
+// `ann_economic_policies` + `ann_epochs` ship their schema so the
+// `EconomicPolicy` abstraction can be referenced in code, but the
+// runtime wiring is deferred. Acceptance of Phase 29 does not depend
+// on those tables being live.
+
+export const annExecutionTarget = pgEnum("ann_execution_target", [
+  "local",       // in-process, deterministic
+  "qubic_oc",    // submitted to services/work (Qubic OC)
+]);
+
+export const annExecutionStatus = pgEnum("ann_execution_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const annVerificationStatus = pgEnum("ann_verification_status", [
+  "pending",             // execution is still running
+  "local_deterministic", // local executor: same input always produces same output
+  "verified",            // OC executor: 3/3 replicas agree (or deterministic re-run matched)
+  "disputed",            // OC executor: replicas disagreed
+  "failed",              // executor could not produce a result
+]);
+
+/**
+ * One row per ANN execution. The row is created when the user
+ * submits a Run request, then updated as the executor reports
+ * state transitions. `outputJson` is populated on completion;
+ * `resultHash` is the deterministic sha256 over
+ *
+ *   ann_manifest_hash || ann_version || input_hash || target ||
+ *   canonicalize(output_json)
+ *
+ * which lets us prove "this output came from this exact ANN version
+ * using this exact input" without trusting the executor's word.
+ *
+ * When `target = qubic_oc`, `workId` is the cross-service ref to
+ * `services/work.work_items.workId`. The QubicOCExecutor polls the
+ * work service until the work item reaches a terminal state, then
+ * copies the result back to this row.
+ */
+export const annExecutions = pgTable(
+  "ann_executions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Service-issued ULID. Format: axe_<26-char ulid>. */
+    executionId: text("execution_id").notNull(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    annVersionId: uuid("ann_version_id")
+      .notNull()
+      .references(() => annVersions.id, { onDelete: "cascade" }),
+    /** denormalised for fast filters. */
+    annVersion: text("ann_version").notNull(),
+    /** Snapshot of the manifest hash at execution time. */
+    manifestHash: text("manifest_hash").notNull(),
+    /** Caller-supplied request id, for cross-service tracing. */
+    requestId: text("request_id").notNull(),
+    target: annExecutionTarget("target").notNull(),
+    status: annExecutionStatus("status").notNull().default("queued"),
+    inputHash: text("input_hash").notNull(),
+    inputUri: text("input_uri").notNull(),
+    inputSizeBytes: bigint("input_size_bytes", { mode: "bigint" }).notNull(),
+    outputJson: jsonb("output_json").$type<Record<string, unknown>>(),
+    resultHash: text("result_hash"),
+    /** Cross-service ref: services/work.work_items.work_id when target=qubic_oc. */
+    workId: text("work_id"),
+    /** Which worker(s) completed the work item (denormalised from work_results). */
+    completedBy: text("completed_by"),
+    verificationStatus: annVerificationStatus("verification_status").notNull().default("pending"),
+    error: text("error"),
+    requestedByUserId: uuid("requested_by_user_id"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    executionIdIdx: uniqueIndex("ann_executions_execution_id_idx").on(t.executionId),
+    annIdx: index("ann_executions_ann_idx").on(t.annId),
+    statusIdx: index("ann_executions_status_idx").on(t.status),
+    targetIdx: index("ann_executions_target_idx").on(t.target),
+    workIdIdx: index("ann_executions_work_id_idx").on(t.workId),
+    requestedByIdx: index("ann_executions_requested_by_idx").on(t.requestedByUserId),
+    manifestIdx: index("ann_executions_manifest_idx").on(t.manifestHash),
+  }),
+);
+
+/**
+ * GitHub (or any git) publication provenance per ANN version.
+ *
+ * One row per published version. `commitSha` + `manifestHash`
+ * together prove that this row's ANN matches the manifest
+ * declared by the repository at that commit.
+ *
+ * `publicationKind = "seed"` is used by the demo seed (no live
+ * GitHub push). `"github_app"` is reserved for the future
+ * publish-to-GitHub flow (out of scope for Phase 29).
+ */
+export const annRepositories = pgTable(
+  "ann_repositories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    annId: uuid("ann_id")
+      .notNull()
+      .references(() => anns.id, { onDelete: "cascade" }),
+    annVersionId: uuid("ann_version_id")
+      .notNull()
+      .references(() => annVersions.id, { onDelete: "cascade" }),
+    repoOwner: text("repo_owner").notNull(),
+    repoName: text("repo_name").notNull(),
+    /** 40-char git SHA. */
+    commitSha: text("commit_sha").notNull(),
+    /** sha256 of the canonical manifest at this commit. */
+    manifestHash: text("manifest_hash").notNull(),
+    /** e.g. "v1.0.0" or null if not tagged. */
+    releaseTag: text("release_tag"),
+    /** Optional HTTPS URL to the release. */
+    releaseUrl: text("release_url"),
+    /** "seed" (manual) or "github_app" (live publish). */
+    publicationKind: text("publication_kind").notNull().default("seed"),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    annIdx: index("ann_repositories_ann_idx").on(t.annId),
+    versionIdx: index("ann_repositories_version_idx").on(t.annVersionId),
+    repoIdx: index("ann_repositories_repo_idx").on(t.repoOwner, t.repoName, t.commitSha),
+    manifestIdx: index("ann_repositories_manifest_idx").on(t.manifestHash),
+  }),
+);
+
+/** Phase 9/10 schema only. Runtime wiring deferred. */
+export const economicPolicyKind = pgEnum("ann_economic_policy_kind", [
+  "burn",        // 100% → burn
+  "stream_burn", // 70% burn, 30% creator/stakers
+  "split",       // 40% burn, 30% creator, 20% stakers, 10% ecosystem
+]);
+
+/**
+ * Economic policy definition. `*Bps` fields are basis points; they
+ * MUST sum to 10000 (enforced at the service layer, not the schema
+ * — Postgres CHECK constraints are awkward for cross-column sums in
+ * drizzle).
+ *
+ * Active policies (one per epoch) drive the future ANN fee
+ * settlement flow. Phase 29 ships the schema + a seed of the
+ * three example policies from the superprompt; the scheduler that
+ * picks which policy is active for an epoch is Phase 10 work.
+ */
+export const annEconomicPolicies = pgTable(
+  "ann_economic_policies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    kind: economicPolicyKind("kind").notNull(),
+    /** Allocation in basis points. Must sum to 10000. */
+    burnBps: integer("burn_bps").notNull(),
+    creatorBps: integer("creator_bps").notNull(),
+    stakersBps: integer("stakers_bps").notNull(),
+    ecosystemBps: integer("ecosystem_bps").notNull(),
+    /** Bounds enforcement (per superprompt §15 example). */
+    burnMinBps: integer("burn_min_bps").notNull().default(2500),
+    burnMaxBps: integer("burn_max_bps").notNull().default(10000),
+    creatorMaxBps: integer("creator_max_bps").notNull().default(4000),
+    stakersMaxBps: integer("stakers_max_bps").notNull().default(3000),
+    ecosystemMaxBps: integer("ecosystem_max_bps").notNull().default(2000),
+    isActive: boolean("is_active").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    slugIdx: uniqueIndex("ann_economic_policies_slug_idx").on(t.slug),
+    activeIdx: index("ann_economic_policies_active_idx").on(t.isActive),
+  }),
+);
+
+export const epochStatus = pgEnum("ann_epoch_status", [
+  "upcoming",
+  "voting",
+  "active",
+  "ended",
+]);
+
+/**
+ * Epoch governance scaffolding. Phase 29 ships the schema; the
+ * vote tally + on-execution path are Phase 10. `activePolicyId`
+ * is the policy that the epoch settles fees against (null until
+ * the policy is locked in).
+ */
+export const annEpochs = pgTable(
+  "ann_epochs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    epochNumber: integer("epoch_number").notNull().unique(),
+    name: text("name").notNull(),
+    status: epochStatus("status").notNull().default("upcoming"),
+    /** The active economic policy for this epoch (FK when not null). */
+    activePolicyId: uuid("active_policy_id").references(() => annEconomicPolicies.id),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    statusIdx: index("ann_epochs_status_idx").on(t.status),
+  }),
+);
+
+export type AnnExecution = typeof annExecutions.$inferSelect;
+export type NewAnnExecution = typeof annExecutions.$inferInsert;
+export type AnnRepository = typeof annRepositories.$inferSelect;
+export type NewAnnRepository = typeof annRepositories.$inferInsert;
+export type AnnEconomicPolicy = typeof annEconomicPolicies.$inferSelect;
+export type NewAnnEconomicPolicy = typeof annEconomicPolicies.$inferInsert;
+export type AnnEpoch = typeof annEpochs.$inferSelect;
+export type NewAnnEpoch = typeof annEpochs.$inferInsert;
+export type AnnExecutionTarget = (typeof annExecutionTarget.enumValues)[number];
+export type AnnExecutionStatus = (typeof annExecutionStatus.enumValues)[number];
+export type AnnVerificationStatus = (typeof annVerificationStatus.enumValues)[number];
+export type EconomicPolicyKind = (typeof economicPolicyKind.enumValues)[number];
+export type EpochStatus = (typeof epochStatus.enumValues)[number];

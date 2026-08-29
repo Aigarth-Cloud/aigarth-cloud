@@ -18,9 +18,11 @@ import { stakeRoutes } from "./routes/stake.js";
 import { governanceRoutes } from "./routes/governance.js";
 import { proposalsRoutes } from "./routes/proposals.js";
 import { organismRoutes } from "./routes/organisms.js";
+import { executionRoutes } from "./routes/executions.js";
 import { registerHttpMetrics } from "@aigarth/observability";
 import { registerAigarthPoolMetrics } from "./lib/aigarthpool_metrics.js";
 import { closeDb } from "./db/index.js";
+import { registerAnnAdapter, BtcDirectionPredictorAdapter } from "./services/execution/index.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -114,6 +116,12 @@ export async function buildServer() {
     reply.header("X-RateLimit-Reset", Math.ceil(bucket.resetAt / 1000));
   });
 
+  // Phase 29 — register the default local ANN adapters before any
+  // route can call the Execution Router. The BTC Direction Predictor
+  // is the demo ANN; a Phase 30+ loader can pull more from a config
+  // file or a database column.
+  registerAnnAdapter(BtcDirectionPredictorAdapter);
+
   await app.register(healthRoutes);
   await app.register(categoryRoutes);
   await app.register(licenseRoutes);
@@ -122,6 +130,7 @@ export async function buildServer() {
   await app.register(governanceRoutes);
   await app.register(proposalsRoutes);
   await app.register(organismRoutes);
+  await app.register(executionRoutes);
   await app.register(meRoutes);
   await app.register(adminRoutes);
 

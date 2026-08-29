@@ -1445,7 +1445,427 @@ const post7: Post = {
 // Exports
 // ---------------------------------------------------------------------------
 
-export const POSTS: Post[] = [post1, post2, post3, post4, post5, post6, post7];
+// ---------------------------------------------------------------------------
+// Post 8: From registry to execution — the Execution Router
+// ---------------------------------------------------------------------------
+
+const post8: Post = {
+  slug: "execution-router-ann-to-qubic-oc",
+  title: "From registry to execution: shipping the Execution Router",
+  excerpt:
+    "A registered ANN can now run locally or through Qubic OC, with the same manifest hash, the same input, and a deterministic result hash. Here is what we built and why it is the bridge to a real decentralized compute economy.",
+  category: "Engineering",
+  author: "Aigarth Cloud Team",
+  date: "Aug 28, 2026",
+  readTime: "8 min",
+  Body: () => (
+    <article>
+      <div className={LABEL_CLASS}>PHASE 29</div>
+      <p className="mt-2 text-pretty text-lg leading-relaxed text-foreground/90">
+        For the last eight months, an Aigarth Cloud ANN was a
+        record in a registry. You could browse it, deploy it,
+        version it, and rate it. What you could not do, until
+        this week, is run the same ANN two different ways and
+        prove which result came from which execution. That
+        changes today.
+      </p>
+
+      <h2 className={H2_CLASS}>The shape of the problem</h2>
+      <Para>
+        A registry is a list of promises. A platform is the
+        thing that makes the promises run. The bridge from
+        "this ANN exists" to "this ANN ran, here is the result,
+        here is the proof" is what the Execution Router is.
+      </Para>
+      <Para>
+        The router is small. The contract is:
+      </Para>
+      <ul className={UL_CLASS}>
+        <CheckBullet>
+          <strong>Same ANN, two executors.</strong> A user picks
+          <em> Local </em> or <em>Qubic OC</em>. The router
+          dispatches. A failed OC execution is visibly failed:
+          no silent fallback to local.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Same input, deterministic result hash.</strong>{" "}
+          Anyone with the manifest, the version, the input,
+          and the output can re-derive the hash and confirm
+          "this result came from this exact ANN version using
+          this exact input."
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Same identity across both targets.</strong> The
+          manifest is the canonical identity. The manifest hash
+          is the version. The repository row is the provenance.
+        </CheckBullet>
+      </ul>
+
+      <h2 className={H2_CLASS}>What we built, in one diagram</h2>
+      <Para>
+        A registered ANN has a manifest. The manifest names an
+        architecture. The architecture has an adapter. The
+        adapter runs. The result is hashed. The hash is the
+        proof. The proof is stored on the ANN execution row,
+        alongside the work_id when the executor was Qubic OC.
+      </Para>
+
+      <pre className="mt-6 overflow-x-auto rounded-xl bg-muted/30 p-6 text-sm leading-relaxed"><code className="font-mono">{`   ANN
+     │
+     ▼
+   ANNExecutionRequest
+     │  manifest_hash + version + input + target
+     ▼
+   ExecutionRouter
+     ├── target=local       → LocalANNExecutor  (in-process)
+     └── target=qubic_oc    → QubicOCExecutor   → services/work`}</code></pre>
+
+      <Para>
+        The router does not know what an ANN does. It only
+        knows which executor handles which target. The
+        executor does the work. The result hash is computed
+        by a single helper that knows the manifest hash, the
+        version, the input hash, the target, and the
+        canonicalised output.
+      </Para>
+
+      <h2 className={H2_CLASS}>The manifest is the identity</h2>
+      <Para>
+        An ANN is not its name, or its creator, or its
+        repository. An ANN is its <em>manifest</em>. Two ANNs
+        are the "same version" iff they have the same
+        <code>manifestHash</code>, which is a sha256 of the
+        canonicalised manifest. The manifest covers id, name,
+        version (semver with a <code>v</code> prefix), creator,
+        architecture, model hash, input and output schemas, an
+        optional benchmark, a repository URL, a commit SHA, a
+        license, and a description.
+      </Para>
+      <Para>
+        The schema is strict. Unknown fields are rejected.
+        Semver is enforced. The model hash is a 64-char
+        lowercase hex string prefixed with <code>sha256:</code>.
+        The 14 ANNs we seeded earlier this year do not all
+        have manifests yet; the demo ANN we ship today does.
+      </Para>
+
+      <h2 className={H2_CLASS}>The local executor is honest</h2>
+      <Para>
+        The local executor runs the ANN's adapter in the
+        current process. No network call, no OC layer. Same
+        input + same manifest + same architecture always
+        produces the same output. The result hash is
+        deterministic.
+      </Para>
+      <Para>
+        If no adapter is registered for the manifest's
+        architecture, the executor falls back to a clearly
+        labelled deterministic stub. The stub's output carries
+        a <code>fixture: true</code> flag, so no caller can
+        mistake it for a real inference. The verification
+        status on a local run is always
+        <code>local_deterministic</code>. We do not pretend
+        that a local run is decentralised.
+      </Para>
+
+      <h2 className={H2_CLASS}>The Qubic OC executor is honest too</h2>
+      <Para>
+        The Qubic OC executor submits the execution to{" "}
+        <code>services/work</code>, the Work Runtime. The
+        Work Runtime was built earlier this year for arbitrary
+        workloads with replication verification. The OC
+        executor uses it as-is: the work item carries the
+        manifest hash, the input, and the algorithm slug{" "}
+        <code>aigarth-oc-algorithm</code>. The work service
+        schedules it, assigns a worker, runs the algorithm,
+        verifies the result, and returns the work_id.
+      </Para>
+      <Para>
+        If the OC service is down, the executor throws. The
+        route returns 503. The UI does not silently fall back
+        to local. A failed decentralized execution must remain
+        visibly failed. This is the rule we wrote down in the
+        superprompt and the rule we kept.
+      </Para>
+
+      <h2 className={H2_CLASS}>The Work Runtime is the engine, not a wrapper</h2>
+      <Para>
+        The Qubic OC executor is a thin HTTP client over{" "}
+        <code>services/work</code>. We did not build a new
+        execution engine; the Work Runtime was already
+        designed for this. The new piece is a small
+        INTERNAL_TOKEN-guarded endpoint on the Work Runtime
+        (<code>POST /v1/internal/work/items</code>) that the
+        ANN service calls with the user's identity. Same
+        shape, same replication, same verifier. The OC executor
+        is 200 lines of TypeScript.
+      </Para>
+      <Para>
+        This is the path of least resistance we kept talking
+        about. The Work Runtime existed. The algorithm
+        registry existed. The verifier existed. The router
+        just wires them together.
+      </Para>
+
+      <h2 className={H2_CLASS}>The OC processor package, in one breath</h2>
+      <Para>
+        The Execution Router is the outbound side: Aigarth
+        submits an ANN execution to the Work Runtime. The
+        inbound side is the OC processor: a Qubic smart
+        contract calls Aigarth, the 451/676 computors sign,
+        the result is signed and returned. We shipped the
+        inbound side as a new package,{" "}
+        <code>@aigarth/oc-processor</code>, with the
+        rate-limit, circuit-breaker, signature-verify, and
+        result-signer pieces.
+      </Para>
+      <ul className={UL_CLASS}>
+        <CheckBullet>
+          <strong>registerAsProcessor(manifest)</strong> wires a
+          processor into the registry. The manifest is the
+          contract with the Qubic network.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>onInvocation(handler)</strong> is the runtime
+          hook. The handler maps the invocation to a work
+          item, the Work Runtime executes it, the result is
+          signed.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>3-layer rate limit</strong> (per-caller,
+          per-processor, per-epoch) and a circuit breaker
+          (CLOSED, OPEN, HALF_OPEN) borrowed from the
+          AigarthPool M3/M4 patterns.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>451/676 signature verify</strong> is shipped
+          as a structural check in v1. The real Ed25519
+          verify is Phase 30+, behind the ADR 007 production
+          gate.
+        </CheckBullet>
+      </ul>
+      <Para>
+        The OC processor's mainnet exposure requires a
+        security review and a public testnet validation. The
+        mechanism is built. The gate is the gate.
+      </Para>
+
+      <h2 className={H2_CLASS}>The UI is a real vertical slice</h2>
+      <Para>
+        The web app now has a <code>/anns/[slug]</code> page
+        that fetches the ANN's manifest, the published
+        repository, and the execution history. The Run panel
+        has a target picker (Local, Qubic OC), a JSON input
+        editor, a Run button that posts to{" "}
+        <code>/api/anns/[slug]/execute</code>, and a polling
+        loop that watches the execution reach a terminal
+        state. The history table shows the last 20 runs with
+        the verification status and the result hash.
+      </Para>
+      <Para>
+        The dashboard has a new <code>/ann-execution</code>{" "}
+        page: the operator view of every ANN, every run,
+        every verification, every work_id. The OC processor
+        dashboard is at <code>/oc</code>, empty for now
+        (the registry hydrates when the operator boots it in
+        the gateway; Phase 30+ persists it).
+      </Para>
+
+      <h2 className={H2_CLASS}>The demo ANN is on purpose trivial</h2>
+      <Para>
+        The demo is the BTC Direction Predictor v1. The
+        architecture is a 5-day momentum rule on a 30-day
+        price window. The adapter sums the last close minus
+        the close from 5 days ago, normalises by the mean
+        price, and emits <code>up</code>, <code>down</code>,
+        or <code>flat</code>. It is not a real model. It is
+        the smallest thing that exercises the entire
+        pipeline end-to-end:
+      </Para>
+      <ul className={UL_CLASS}>
+        <CheckBullet>
+          <strong>Manifest</strong>: id, version, architecture,
+          input/output schemas, model hash, repository, commit,
+          license.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Adapter</strong>: registered at boot, called
+          by the local executor.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Repository row</strong>: synthetic commit SHA
+          from the manifest hash, kind <code>seed</code>, with
+          a <code>releaseUrl</code> that encodes the
+          architecture so the executor can find the adapter.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Local run</strong>: deterministic, fast,
+          returns the prediction in milliseconds.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>OC run</strong>: submits to the Work
+          Runtime, polls until verified, returns the work_id
+          and the result hash.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Result hash</strong>: identical for both
+          targets when the algorithm is deterministic. The
+          OC executor uses the{" "}
+          <code>deterministic</code> verification method
+          (single re-run, not 3-way replication).
+        </CheckBullet>
+      </ul>
+      <Para>
+        The BTC Direction Predictor exists to prove the
+        pipeline works. It is not a product. A real
+        predictor would be an MLP or a transformer. The
+        fixture is the canary.
+      </Para>
+
+      <h2 className={H2_CLASS}>What we did not build (on purpose)</h2>
+      <Para>
+        Three things are deferred, and we are being explicit
+        about them so no one reads the UI and assumes more
+        is operational than it is.
+      </Para>
+      <ul className={UL_CLASS}>
+        <CheckBullet>
+          <strong>GitHub publishing is a stub.</strong> The
+          <code>POST /v1/anns/:idOrSlug/github-publish</code>{" "}
+          route returns <code>not_configured</code> with a
+          pointer to the env vars an operator needs to set.
+          The seed attaches a synthetic repository row
+          directly. The real GitHub App wire-up is Phase 30+,
+          after the security review.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>The OC processor is not exposed as a
+          public HTTPS endpoint.</strong> The package is a
+          library. The gateway wire-up is Phase 30+.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Economic policy runtime is schema-only.</strong>{" "}
+          The <code>ann_economic_policies</code> and{" "}
+          <code>ann_epochs</code> tables ship. The runtime
+          that uses them is Phase 9/10 work, after the
+          execution primitive is stable.
+        </CheckBullet>
+      </ul>
+
+      <h2 className={H2_CLASS}>Numbers for the engineers</h2>
+      <Para>
+        This delivery touches four services, one new package,
+        one new migration, and one new public page. The
+        breakdown:
+      </Para>
+      <ul className={UL_CLASS}>
+        <CheckBullet>
+          <strong>services/ann</strong>: 1 migration (0008),
+          4 new tables (<code>ann_executions</code>,{" "}
+          <code>ann_repositories</code>,{" "}
+          <code>ann_economic_policies</code>,{" "}
+          <code>ann_epochs</code>), 5 new routes
+          (<code>execute</code>, <code>executions</code>,{" "}
+          <code>executions/:id</code>, <code>repositories</code>,{" "}
+          <code>github-publish</code>), the Execution Router
+          + 2 executors + the result-hash helper + the
+          adapter registry + the BTC demo adapter + the
+          execution service + the manifest types.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>services/work</strong>: 1 new internal route
+          (<code>POST /v1/internal/work/items</code>) +
+          (<code>GET /v1/internal/work/items/:work_id</code>),
+          the canonical <code>serializeWorkItem</code>{" "}
+          exported for cross-service callers.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>packages/oc-processor</strong>: the new
+          package — types, canonicalisation, signature
+          verify, rate limit, circuit breaker, result
+          signer, work-runtime integration, registry, the
+          full pipeline.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>packages/sdk</strong>: new{" "}
+          <code>anns.execute</code>,{" "}
+          <code>anns.listExecutions</code>,{" "}
+          <code>anns.getExecution</code>,{" "}
+          <code>anns.listRepositories</code>; new{" "}
+          <code>OcProcessors</code> resource for the inbound
+          side.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>apps/web</strong>: new{" "}
+          <code>/anns/[slug]</code> page with the Run panel,
+          three server proxies, the demo BTC seed.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>apps/dashboard</strong>: new{" "}
+          <code>/ann-execution</code> and{" "}
+          <code>/ann-execution/[slug]</code> pages, new{" "}
+          <code>/oc</code> page, the SDK adapter.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>docs</strong>: new{" "}
+          <code>docs/ann-execution/README.md</code>, new{" "}
+          <code>docs/oc-processor/README.md</code>, full
+          phase delivery report.
+        </CheckBullet>
+        <CheckBullet>
+          <strong>Tests</strong>: 37 new tests in the
+          oc-processor package, 38 new tests in services/ann
+          (manifest, result-hash, router, BTC adapter,
+          executions service). All pass; the existing 200+ in
+          the ANN service still pass.
+        </CheckBullet>
+      </ul>
+
+      <h2 className={H2_CLASS}>The bridge we crossed</h2>
+      <Para>
+        Aigarth Cloud can now take an ANN from a developer's
+        machine, give it a permanent identity, publish it
+        openly, send it into the Work Runtime, and return a
+        verifiable result. The GitHub publish is the only
+        piece that is still a stub, and the manifest hash
+        carries the identity regardless of where the
+        artifact is stored.
+      </Para>
+      <Para>
+        The end state is no longer "an AI website." The
+        platform deploys intelligence into a decentralized
+        compute economy. The router is the seam between
+        "I built an ANN" and "the network ran it, and here
+        is the proof."
+      </Para>
+      <Para>
+        That is the bridge. The next one is the
+        marketplace: staking, creator rewards, governance,
+        and the economic policy runtime. Phase 30+.
+      </Para>
+
+      <div className="mt-12 flex flex-wrap items-center gap-3">
+        <Link href="/anns/btc-direction-predictor">
+          <Button size="lg" className="gap-1.5">
+            Run the demo ANN
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </Link>
+        <Link href="/dashboard/ann-execution">
+          <Button size="lg" variant="outline">
+            Open the operator dashboard
+          </Button>
+        </Link>
+      </div>
+    </article>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+export const POSTS: Post[] = [post1, post2, post3, post4, post5, post6, post7, post8];
 
 export const POSTS_BY_SLUG: Record<string, Post> = Object.fromEntries(
   POSTS.map((p) => [p.slug, p]),

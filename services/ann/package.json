@@ -19,6 +19,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
     "db:seed": "tsx --env-file=.env src/db/seed.ts",
+    "db:seed-anns": "tsx --env-file=.env src/db/seed-anns.ts",
+    "db:seed-btc": "tsx --env-file=.env src/db/seed-btc-direction-predictor.ts",
     "clean": "node scripts/clean.mjs"
   },
   "dependencies": {

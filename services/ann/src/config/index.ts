@@ -131,6 +131,22 @@ const ConfigSchema = z.object({
     .string()
     .default("")
     .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean)),
+
+  // ---------- Phase 29 — Execution Router ----------
+  //
+  // The QubicOCExecutor submits work items to services/work. The
+  // INTERNAL_TOKEN must match the work service's value; the dev
+  // default is the shared "internal_dev_token_change_me" placeholder
+  // (AGENTS.md §1 — rotate before any non-dev deployment).
+
+  /** services/work base URL. */
+  WORK_SERVICE_URL: z.string().url().default("http://localhost:7012"),
+
+  /** Internal token used when calling /v1/internal/work/items. */
+  INTERNAL_TOKEN: z
+    .string()
+    .min(16, "INTERNAL_TOKEN must be at least 16 characters")
+    .default("internal_dev_token_change_me"),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
