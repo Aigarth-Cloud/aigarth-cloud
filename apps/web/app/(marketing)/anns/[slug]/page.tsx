@@ -32,27 +32,55 @@ export default async function AnnDetailPage({ params }: PageProps) {
   // here (the visitor can still read the public summary); the Run
   // panel itself shows a sign-in CTA if no session is present.
 
+  // The retrieve + listRepositories endpoints are public on services/ann
+  // (no JWT required). We call them directly via the ANN service URL
+  // (defaults to the in-network Docker alias "ann:7006") so the page
+  // works for unauthenticated visitors too. The SDK's session-bound
+  // call path is kept as a fallback for when getAigarth() returns a
+  // real client (the only difference is that the SDK sends the JWT,
+  // which services/ann ignores on read endpoints).
+  const annBase = process.env.AIGARTH_ANN_URL ?? "http://ann:7006";
+
+  async function fetchPublic<T>(path: string): Promise<T | null> {
+    try {
+      const res = await fetch(`${annBase}${path}`, {
+        // Always send a Host header that the ANN service accepts. In
+        // production the service is behind Traefik which sets the
+        // Host; the explicit header is a defensive default.
+        headers: { host: "aigarth.cloud" },
+        cache: "no-store",
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as T;
+    } catch {
+      return null;
+    }
+  }
+
   // Fetch the ANN + version + repositories (all public) so we
   // can populate the manifest hash + the list of published
   // GitHub commits. If the ANN doesn't exist, 404.
-  let ann: Record<string, unknown> | null = null;
-  let repos: Array<Record<string, unknown>> = [];
-  if (a) {
-    try {
-      ann = (await a.anns.retrieve(params.slug)) as unknown as Record<string, unknown>;
-    } catch {
-      ann = null;
-    }
-    try {
-      const r = (await a.anns.listRepositories(params.slug)) as { data: Array<Record<string, unknown>> };
-      repos = r.data;
-    } catch {
-      repos = [];
-    }
-  }
+  //
+  // We use the public fetch path always (the SDK's Ann type is
+  // out of sync with the actual service shape; the public fetch
+  // returns the live snake_case shape and works for both
+  // authenticated and anonymous visitors).
+  const ann = await fetchPublic<Record<string, unknown>>(
+    `/v1/anns/${encodeURIComponent(params.slug)}`,
+  );
   if (!ann) {
     notFound();
   }
+
+  // Repositories are public too.
+  const reposResult = await fetchPublic<{ data: Array<Record<string, unknown>> }>(
+    `/v1/anns/${encodeURIComponent(params.slug)}/repositories`,
+  );
+  const repos: Array<Record<string, unknown>> = reposResult?.data ?? [];
+
+  // `a` is kept around for the Run panel below (it needs auth to
+  // submit executions). Suppress the unused-binding warning.
+  void a;
 
   const name = (ann.name as string) ?? params.slug;
   const tagline = (ann.tagline as string) ?? "";
@@ -60,7 +88,7 @@ export default async function AnnDetailPage({ params }: PageProps) {
   const creatorName = (ann.creator_name as string) ?? (ann.creatorName as string) ?? "Unknown";
   const currentVersion = (ann.current_version as string) ?? (ann.currentVersion as string) ?? "v1.0.0";
   const accuracy = ann.accuracy ? `${ann.accuracy}%` : null;
-  const latencyMs = (ann.latency_p50_ms as number) ?? (ann.latencyP50Ms as number) ?? null;
+  const latencyMs = (ann.latency_p50_ms as number) ?? ((ann as unknown as Record<string, unknown>).latencyP50Ms as number) ?? null;
   const manifestHash = repos[0]?.manifest_hash as string | undefined;
   const architecture = (() => {
     const url = repos[0]?.release_url as string | undefined;
