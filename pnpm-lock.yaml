@@ -322,10 +322,6 @@ importers:
         version: 2.1.9(@types/node@20.19.43)
 
   packages/sdk:
-    dependencies:
-      '@aigarth/oc-processor':
-        specifier: workspace:*
-        version: link:../oc-processor
     devDependencies:
       '@aigarth/config':
         specifier: workspace:*
