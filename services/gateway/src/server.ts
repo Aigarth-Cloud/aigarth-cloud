@@ -10,6 +10,10 @@
  *   - /v1/images/generations           (JWT or API key)
  *   - /v1/usage, /v1/usage/recent      (JWT auth, aggregate + recent)
  *
+ * Proxied to the ANN service (Phase 28+ third-party enablement):
+ *   - /v1/anns*, /v1/categories, /v1/licenses, /v1/me/*, /v1/organisms/*
+ *   - See routes/ann-proxy.ts for the allowlist and rationale.
+ *
  * Auth model:
  *   - JWT: same JWT_SECRET as the identity service. Used for first-party clients.
  *   - API key: gateway-issued `ak_live_<prefix>.<secret>`. Used for SDK clients.
@@ -31,6 +35,7 @@ import { chatRoutes } from "./routes/chat.js";
 import { embeddingRoutes } from "./routes/embeddings.js";
 import { imageRoutes } from "./routes/images.js";
 import { usageRoutes } from "./routes/usage.js";
+import { annProxyRoutes } from "./routes/ann-proxy.js";
 import { closeDb } from "./db/index.js";
 import { registerHttpMetrics } from "@aigarth/observability";
 
@@ -89,6 +94,11 @@ export async function buildServer() {
   await app.register(embeddingRoutes);
   await app.register(imageRoutes);
   await app.register(usageRoutes);
+  // Phase 28+ third-party enablement — forward ANN service routes
+  // (/v1/anns*, /v1/categories, /v1/licenses, /v1/me/*, /v1/organisms/*)
+  // to services/ann. Must be registered LAST so Fastify's router
+  // matches the specific gateway-owned routes above first.
+  await app.register(annProxyRoutes);
 
   return app;
 }
