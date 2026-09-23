@@ -1,0 +1,41 @@
+{
+  "name": "@aigarth/evo-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIGARTH-EVO-02 — WebAssembly port of the @aigarth/evo substrate. Browser-side execution of the same deterministic evaluation function used by the server, so a browser tab can contribute evaluations to the global pool and have its work verified byte-for-byte.",
+  "type": "module",
+  "main": "./dist/evo-wasm.js",
+  "types": "./dist/evo-wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/evo-wasm.d.ts",
+      "import": "./dist/evo-wasm.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "echo \"lint not configured yet\" && exit 0",
+    "typecheck": "tsc --noEmit",
+    "build:wasm": "asc assembly/index.ts --target release --outFile dist/evo-wasm.wasm --optimize --runtime stub --exportMemory --exportRuntime",
+    "build:js": "tsc",
+    "build": "npm run build:wasm && npm run build:js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo dist coverage"
+  },
+  "dependencies": {
+    "@aigarth/evo": "workspace:*"
+  },
+  "devDependencies": {
+    "@aigarth/config": "workspace:*",
+    "@types/node": "^20.16.11",
+    "@vitest/coverage-v8": "^2.1.2",
+    "assemblyscript": "^0.27.30",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

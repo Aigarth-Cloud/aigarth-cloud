@@ -44,6 +44,7 @@ export const workStatus = pgEnum("work_status", [
 export const workerKind = pgEnum("worker_kind", [
   "local",
   "remote",
+  "browser",
   "oc-processor",
   "neuraxon",
   "human-via-oracle",

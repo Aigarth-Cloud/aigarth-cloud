@@ -1,0 +1,65 @@
+{
+  "name": "@aigarth/evo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIGARTH-EVO — ternary rule-table evolutionary substrate. The closed-loop evolution engine that drives Anna-style adaptive intelligences on Aigarth Cloud. Pure, deterministic, swappable fitness environments.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./genome": {
+      "types": "./dist/genome.d.ts",
+      "import": "./dist/genome.js"
+    },
+    "./mutate": {
+      "types": "./dist/mutate.d.ts",
+      "import": "./dist/mutate.js"
+    },
+    "./eval": {
+      "types": "./dist/eval.d.ts",
+      "import": "./dist/eval.js"
+    },
+    "./rng": {
+      "types": "./dist/rng.d.ts",
+      "import": "./dist/rng.js"
+    },
+    "./environments": {
+      "types": "./dist/environments/index.d.ts",
+      "import": "./dist/environments/index.js"
+    },
+    "./evolve": {
+      "types": "./dist/evolve.d.ts",
+      "import": "./dist/evolve.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "echo \"lint not configured yet\" && exit 0",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --declaration --declarationMap",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "clean": "rm -rf .turbo dist coverage",
+    "demo:evo01": "tsx --env-file=.env scripts/evo-01.ts"
+  },
+  "dependencies": {
+    "@aigarth/trinary": "workspace:*",
+    "zod": "~3.23.8"
+  },
+  "devDependencies": {
+    "@aigarth/config": "workspace:*",
+    "@types/node": "^20.16.11",
+    "@vitest/coverage-v8": "^2.1.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

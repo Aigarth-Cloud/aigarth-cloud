@@ -178,6 +178,15 @@ const SERVICES: ServiceDef[] = [
     group: "Intelligence",
     icon: Cpu,
   },
+  {
+    name: "Work",
+    port: 7012,
+    url: "http://localhost:7012",
+    purpose: "Work Runtime. Algorithm registry (awork_1, evo_step), scheduler, replication verifier, worker heartbeat, billing hook. Phase 27 + AIGARTH-EVO-01.",
+    kind: "service",
+    group: "Intelligence",
+    icon: Layers,
+  },
 ];
 
 const INFRA: ServiceDef[] = [

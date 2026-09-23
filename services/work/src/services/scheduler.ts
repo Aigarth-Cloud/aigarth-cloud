@@ -140,7 +140,11 @@ export async function assignItemToWorker(
 ): Promise<void> {
   const db = getDb();
   const cfg = loadConfig();
-  const leaseExpiresAt = new Date(Date.now() + cfg.WORK_LEASE_DURATION_MS);
+  // AIGARTH-EVO-02: browser workers get a 10s lease (vs 30s for
+  // local/remote). Browser tabs vanish mid-run frequently, and
+  // returning the lease to the queue faster reduces wasted compute.
+  const leaseMs = worker.kind === "browser" ? 10_000 : cfg.WORK_LEASE_DURATION_MS;
+  const leaseExpiresAt = new Date(Date.now() + leaseMs);
 
   await db.insert(workResults).values({
     workId: item.workId,
@@ -158,7 +162,7 @@ export async function assignItemToWorker(
     workId: item.workId,
     workerId: worker.workerId,
     action: auditAction.itemClaimed,
-    metadata: { leaseExpiresAt: leaseExpiresAt.toISOString() },
+    metadata: { leaseExpiresAt: leaseExpiresAt.toISOString(), leaseMs },
   });
 }
 

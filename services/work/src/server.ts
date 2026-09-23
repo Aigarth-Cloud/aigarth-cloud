@@ -17,7 +17,8 @@ import { algorithmRoutes } from "./routes/algorithms.js";
 import { internalRoutes } from "./routes/internal.js";
 import { closeDb } from "./db/index.js";
 import { registerHttpMetrics } from "@aigarth/observability";
-import { ensureAwork1Registered } from "./services/algorithms.js";
+import { ensureAwork1Registered, ensureEvoStepRegistered } from "./services/algorithms.js";
+import { poolRoutes } from "./routes/pool.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -100,6 +101,7 @@ export async function buildServer() {
   await app.register(itemRoutes);
   await app.register(workerRoutes);
   await app.register(algorithmRoutes);
+  await app.register(poolRoutes);
   await app.register(internalRoutes);
 
   return app;
@@ -114,6 +116,12 @@ export async function start() {
     await ensureAwork1Registered();
   } catch (err) {
     app.log.warn({ err }, "awork_1 registration failed at startup; will retry on first access");
+  }
+  // Eagerly ensure evo_step is registered (Phase AIGARTH-EVO-01).
+  try {
+    await ensureEvoStepRegistered();
+  } catch (err) {
+    app.log.warn({ err }, "evo_step registration failed at startup; will retry on first access");
   }
 
   // Start the assignment + challenger loops.

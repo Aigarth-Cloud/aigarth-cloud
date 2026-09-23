@@ -35,6 +35,28 @@ export const AWORK_1_DEFINITION: RegisterAlgorithmInput = {
     "Phase 27 first algorithm. A deterministic numerical benchmark: given an input seed, computes a SHA-256-derived fixed-point sequence. v1: container is a Python daemon that reads a JSON payload `{seed: int, iters: int}` and writes `{hash: sha256:...}`. Used as the proof that the Work Runtime can route, replicate, and verify.",
 };
 
+/**
+ * The evo_step algorithm record (Phase AIGARTH-EVO-01).
+ *
+ * One synchronous evolution step over a population of ternary
+ * rule-table genomes. Deterministic given a fixed seed. The input
+ * payload is the JSON-serialised evolution config + current
+ * population; the output payload is the JSON-serialised
+ * `EvolutionResult` (best genome, fitness, per-generation trace).
+ *
+ * Runs *inside* the Work Runtime so the substrate's audit trail
+ * (work_items, work_results, worker_challenges) is uniform with
+ * every other algorithm on the platform.
+ */
+export const EVO_STEP_DEFINITION: RegisterAlgorithmInput = {
+  name: "evo_step",
+  version: "v0.1.0",
+  container: "registry.aigarth.cloud/algorithms/evo_step:v0.1.0",
+  deterministic: true,
+  description:
+    "AIGARTH-EVO-01 — one synchronous evolution step over a population of ternary rule-table genomes (see @aigarth/evo). Deterministic given a fixed seed. Input: evolution config + current population (JSON). Output: best genome + per-generation trace (JSON). Bridges the Work Runtime to the evolutionary substrate.",
+};
+
 export class AlgorithmAlreadyRegisteredError extends Error {
   constructor(name: string, version: string) {
     super(`Algorithm '${name}' @ '${version}' is already registered.`);
@@ -93,6 +115,14 @@ export async function registerAlgorithm(
 
 export async function ensureAwork1Registered(): Promise<WorkAlgorithm> {
   return registerAlgorithm(AWORK_1_DEFINITION);
+}
+
+/**
+ * Register the evo_step algorithm (Phase AIGARTH-EVO-01). Idempotent
+ * like `ensureAwork1Registered`.
+ */
+export async function ensureEvoStepRegistered(): Promise<WorkAlgorithm> {
+  return registerAlgorithm(EVO_STEP_DEFINITION);
 }
 
 export async function listAlgorithms(): Promise<WorkAlgorithm[]> {
