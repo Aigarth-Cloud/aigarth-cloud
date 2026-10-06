@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ListChecks, FileText, Activity, Sun, Moon, Rocket, Server, Network, Video, Wallet, ShieldCheck, BookOpen, GraduationCap, Newspaper, TrendingUp, Sparkles, Cpu } from "lucide-react";
+import { LayoutDashboard, ListChecks, FileText, Activity, Sun, Moon, Rocket, Server, Network, Video, Wallet, ShieldCheck, BookOpen, GraduationCap, Newspaper, TrendingUp, Sparkles, Cpu, GitBranch } from "lucide-react";
 import { cn } from "@aigarth/utils";
 
 const NAV = [
@@ -14,6 +14,7 @@ const NAV = [
   { label: "Marketing", href: "/marketing", icon: TrendingUp },
   { label: "Evolution", href: "/evolution", icon: Sparkles },
   { label: "ANN Execution", href: "/ann-execution", icon: Cpu },
+  { label: "Architecture", href: "/architecture", icon: GitBranch },
   { label: "Services", href: "/services", icon: Server },
   { label: "Wallet Auth", href: "/wallet-auth", icon: Wallet },
   { label: "Governance", href: "/governance", icon: ShieldCheck },
