@@ -50,7 +50,7 @@
     "clean": "node scripts/clean.mjs"
   },
   "dependencies": {
-    "zod": "~3.23.8"
+    "zod": "~4.4.3"
   },
   "devDependencies": {
     "@aigarth/config": "workspace:*",
